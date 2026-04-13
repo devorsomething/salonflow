@@ -1,0 +1,152 @@
+{
+  "name": "Salon Reminder - 24h SMS",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 1
+            }
+          ]
+        }
+      },
+      "id": "node-schedule-24h",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": {
+          "raw": "SELECT id, client_name, client_phone, appointment_time, service_name FROM appointments WHERE appointment_time BETWEEN NOW() + INTERVAL '23 hours' AND NOW() + INTERVAL '25 hours' AND status = 'confirmed' AND reminder_24h_sent = false"
+        }
+      },
+      "id": "node-supabase-query-24h",
+      "name": "Query Upcoming Appointments",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [470, 300],
+      "credentials": {
+        "supabaseApi": {
+          "id": "1",
+          "name": "Supabase API"
+        }
+      },
+      "options": {
+        "supabaseUrl": "={{ $env.SUPABASE_URL }}",
+        "supabaseServiceRoleKey": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "table": "appointments",
+        "updateKey": "id",
+        "fieldsToSkip": [],
+        "columnsToUpdate": {
+          "reminder_24h_sent": true
+        }
+      },
+      "id": "node-mark-24h-sent",
+      "name": "Mark 24h Reminder Sent",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [690, 300],
+      "credentials": {
+        "supabaseApi": {
+          "id": "1",
+          "name": "Supabase API"
+        }
+      },
+      "options": {
+        "supabaseUrl": "={{ $env.SUPABASE_URL }}",
+        "supabaseServiceRoleKey": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+      }
+    },
+    {
+      "parameters": {
+        "operation": "sendSMS",
+        "from": "={{ $env.TWILIO_PHONE_NUMBER }}",
+        "to": "={{ $json.client_phone }}",
+        "message": "={{ $json.client_name }}, this is a reminder that you have an appointment for {{ $json.service_name }} tomorrow at {{ $json.appointment_time }}. Reply CANCEL to cancel."
+      },
+      "id": "node-twilio-sms-24h",
+      "name": "Send 24h SMS Reminder",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [910, 300],
+      "credentials": {
+        "twilioApi": {
+          "id": "1",
+          "name": "Twilio API"
+        }
+      },
+      "options": {
+        "accountSid": "={{ $env.TWILIO_ACCOUNT_SID }}",
+        "authToken": "={{ $env.TWILIO_AUTH_TOKEN }}"
+      }
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Query Upcoming Appointments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query Upcoming Appointments": {
+      "main": [
+        [
+          {
+            "node": "Mark 24h Reminder Sent",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send 24h SMS Reminder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark 24h Reminder Sent": {
+      "main": [
+        []
+      ]
+    },
+    "Send 24h SMS Reminder": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1",
+  "id": "salon-reminder-24h",
+  "meta": {
+    "templateCredsSetup": [
+      {
+        "name": "Supabase API",
+        "credentialsId": "1"
+      },
+      {
+        "name": "Twilio API",
+        "credentialsId": "1"
+      }
+    ]
+  },
+  "tags": ["salon", "reminder", "sms"]
+}

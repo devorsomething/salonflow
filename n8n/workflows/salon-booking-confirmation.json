@@ -1,0 +1,145 @@
+{
+  "name": "Salon Booking Confirmation Email",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "booking-confirmation",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "node-webhook-confirm",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "salon-booking-confirmation"
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "table": "appointments",
+        "columnsToInsert": {
+          "client_name": "={{ $json.body.client_name }}",
+          "client_email": "={{ $json.body.client_email }}",
+          "client_phone": "={{ $json.body.client_phone }}",
+          "appointment_time": "={{ $json.body.appointment_time }}",
+          "service_name": "={{ $json.body.service_name }}",
+          "status": "confirmed"
+        }
+      },
+      "id": "node-supabase-insert",
+      "name": "Insert Booking to Supabase",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [470, 300],
+      "credentials": {
+        "supabaseApi": {
+          "id": "1",
+          "name": "Supabase API"
+        }
+      },
+      "options": {
+        "supabaseUrl": "={{ $env.SUPABASE_URL }}",
+        "supabaseServiceRoleKey": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+      }
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "fromEmail": "={{ $env.SMTP_FROM }}",
+        "toEmail": "={{ $json.body.client_email }}",
+        "subject": "={{ 'Your Salon Appointment is Confirmed: ' + $json.body.service_name }}",
+        "emailBody": "=<!DOCTYPE html><html><body><h2>Hi {{ $json.body.client_name }},</h2><p>Your appointment for <strong>{{ $json.body.service_name }}</strong> has been confirmed.</p><p><strong>Date & Time:</strong> {{ $json.body.appointment_time }}</p><p>We look forward to seeing you!</p><p>Best regards,<br>Salon Team</p></body></html>",
+        "options": {
+          "html": true
+        }
+      },
+      "id": "node-resend-email",
+      "name": "Send Confirmation Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1.3,
+      "position": [690, 300],
+      "credentials": {
+        "resendApi": {
+          "id": "1",
+          "name": "Resend API"
+        }
+      },
+      "options": {
+        "apiKey": "={{ $env.RESEND_API_KEY }}"
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": {},
+        "respondWithFormat": "json",
+        "options": {}
+      },
+      "id": "node-respond-webhook",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [910, 300]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Insert Booking to Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Booking to Supabase": {
+      "main": [
+        [
+          {
+            "node": "Send Confirmation Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Confirmation Email": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond to Webhook": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1",
+  "id": "salon-booking-confirmation",
+  "meta": {
+    "templateCredsSetup": [
+      {
+        "name": "Supabase API",
+        "credentialsId": "1"
+      },
+      {
+        "name": "Resend API",
+        "credentialsId": "1"
+      }
+    ]
+  },
+  "tags": ["salon", "booking", "email", "confirmation"]
+}

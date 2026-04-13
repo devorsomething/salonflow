@@ -1,0 +1,141 @@
+{
+  "name": "Salon External Booking Webhook",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "salon-booking",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "node-external-webhook",
+      "name": "External Webhook Receiver",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "salon-external-booking"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": {
+          "raw": "SELECT id, staff_id, duration_minutes FROM services WHERE name = '{{ $json.body.service_name }}' LIMIT 1"
+        },
+        "options": {}
+      },
+      "id": "node-get-service",
+      "name": "Get Service Details",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [470, 300],
+      "credentials": {
+        "supabaseApi": {
+          "id": "1",
+          "name": "Supabase API"
+        }
+      },
+      "options": {
+        "supabaseUrl": "={{ $env.SUPABASE_URL }}",
+        "supabaseServiceRoleKey": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+      }
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "table": "appointment_requests",
+        "columnsToInsert": {
+          "client_name": "={{ $json.body.client_name }}",
+          "client_email": "={{ $json.body.client_email }}",
+          "client_phone": "={{ $json.body.client_phone }}",
+          "requested_time": "={{ $json.body.appointment_time }}",
+          "service_name": "={{ $json.body.service_name }}",
+          "source": "={{ $json.body.source || 'external' }}",
+          "status": "pending"
+        }
+      },
+      "id": "node-insert-request",
+      "name": "Insert Booking Request",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [690, 300],
+      "credentials": {
+        "supabaseApi": {
+          "id": "1",
+          "name": "Supabase API"
+        }
+      },
+      "options": {
+        "supabaseUrl": "={{ $env.SUPABASE_URL }}",
+        "supabaseServiceRoleKey": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "RESPOND",
+        "respondWith": {},
+        "responseCode": 200,
+        "options": {}
+      },
+      "id": "node-respond-success",
+      "name": "Respond Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [910, 300]
+    }
+  ],
+  "connections": {
+    "External Webhook Receiver": {
+      "main": [
+        [
+          {
+            "node": "Get Service Details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Service Details": {
+      "main": [
+        [
+          {
+            "node": "Insert Booking Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Booking Request": {
+      "main": [
+        [
+          {
+            "node": "Respond Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond Success": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1",
+  "id": "salon-booking-webhook",
+  "meta": {
+    "templateCredsSetup": [
+      {
+        "name": "Supabase API",
+        "credentialsId": "1"
+      }
+    ]
+  },
+  "tags": ["salon", "booking", "webhook", "external"]
+}
