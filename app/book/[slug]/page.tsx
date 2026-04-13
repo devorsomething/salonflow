@@ -22,12 +22,19 @@ interface TimeSlot {
   available: boolean;
 }
 
+interface Addon {
+  id: string;
+  name: string;
+  price: number;
+}
+
 interface SalonData {
   id: string;
   name: string;
   description: string;
   services: Service[];
   stylists: Stylist[];
+  addons?: Addon[];
 }
 
 interface BookingFormData {
@@ -35,9 +42,19 @@ interface BookingFormData {
   phone: string;
   email: string;
   notes: string;
+  preferred_time: 'morning' | 'afternoon' | 'evening' | '';
 }
 
 type Step = 'service' | 'stylist' | 'date' | 'time' | 'info' | 'confirm';
+type AnimationDirection = 'left' | 'right' | 'none';
+
+// Default add-ons
+const DEFAULT_ADDONS: Addon[] = [
+  { id: 'coffee', name: 'Kaffee', price: 2 },
+  { id: 'hair-product', name: 'Haarprodukt', price: 15 },
+  { id: 'champagne', name: 'Champagner', price: 12 },
+  { id: 'parking', name: 'Parken', price: 5 },
+];
 
 // API functions
 async function fetchSalon(slug: string): Promise<SalonData | null> {
@@ -81,6 +98,8 @@ async function createBooking(data: {
   phone: string;
   email?: string;
   notes?: string;
+  preferred_time?: string;
+  addons?: string[];
 }): Promise<{ token: string } | null> {
   try {
     const res = await fetch('/api/bookings', {
@@ -305,6 +324,105 @@ function StepIndicator({ currentStep, steps }: { currentStep: Step; steps: { key
   );
 }
 
+// Booking Summary Sidebar Component
+function BookingSummarySidebar({
+  service,
+  stylist,
+  date,
+  time,
+  addons,
+  preferredTime,
+  notes,
+}: {
+  service: Service | null;
+  stylist: Stylist | null;
+  date: Date | null;
+  time: string | null;
+  addons: Addon[];
+  preferredTime: string;
+  notes: string;
+}) {
+  const servicePrice = service?.price || 0;
+  const addonsPrice = addons.reduce((sum, a) => sum + a.price, 0);
+  const totalPrice = servicePrice + addonsPrice;
+
+  const preferredTimeLabel = {
+    morning: 'Vormittag (8-12 Uhr)',
+    afternoon: 'Nachmittag (12-17 Uhr)',
+    evening: 'Abend (17-20 Uhr)',
+  }[preferredTime] || '-';
+
+  return (
+    <div className="bg-white rounded-2xl p-6 shadow-sm border border-sage-100 lg:sticky lg:top-24">
+      <h3 className="text-lg font-semibold text-sage-900 mb-4">Buchungsübersicht</h3>
+      
+      <div className="space-y-4">
+        {service && (
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-sage-600 text-sm">Service</p>
+              <p className="font-medium text-sage-900">{service.name}</p>
+              <p className="text-xs text-sage-500">{service.duration_min} Min.</p>
+            </div>
+            <p className="font-semibold text-sage-700">€{service.price.toFixed(2)}</p>
+          </div>
+        )}
+
+        {stylist && (
+          <div className="border-t border-sage-100 pt-4">
+            <p className="text-sage-600 text-sm">Stylist</p>
+            <div className="flex items-center gap-2 mt-1">
+              <div className="w-8 h-8 rounded-full bg-sage-200 flex items-center justify-center">
+                <span className="text-sm font-medium text-sage-700">
+                  {stylist.name.charAt(0)}
+                </span>
+              </div>
+              <p className="font-medium text-sage-900">{stylist.name}</p>
+            </div>
+          </div>
+        )}
+
+        {date && (
+          <div className="border-t border-sage-100 pt-4">
+            <p className="text-sage-600 text-sm">Datum & Zeit</p>
+            <p className="font-medium text-sage-900">{formatDisplayDate(date)}</p>
+            {time && <p className="text-sage-700">{formatTime(time)} Uhr</p>}
+            {preferredTime && (
+              <p className="text-sm text-sage-500 mt-1">Präferenz: {preferredTimeLabel}</p>
+            )}
+          </div>
+        )}
+
+        {addons.length > 0 && (
+          <div className="border-t border-sage-100 pt-4">
+            <p className="text-sage-600 text-sm mb-2">Add-ons</p>
+            {addons.map((addon) => (
+              <div key={addon.id} className="flex justify-between items-center mb-1">
+                <span className="text-sage-700">{addon.name}</span>
+                <span className="font-medium text-sage-700">+€{addon.price.toFixed(2)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {notes && (
+          <div className="border-t border-sage-100 pt-4">
+            <p className="text-sage-600 text-sm">Notizen</p>
+            <p className="text-sage-700 text-sm mt-1 italic">"{notes}"</p>
+          </div>
+        )}
+
+        <div className="border-t border-sage-200 pt-4">
+          <div className="flex justify-between items-center">
+            <p className="text-sage-600 font-medium">Gesamt</p>
+            <p className="text-xl font-bold text-sage-900">€{totalPrice.toFixed(2)}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Main Component
 export default function BookingPage() {
   const params = useParams();
@@ -313,11 +431,15 @@ export default function BookingPage() {
 
   // Booking state
   const [salon, setSalon] = useState<SalonData | null>(null);
+  const [addons, setAddons] = useState<Addon[]>(DEFAULT_ADDONS);
+  const [selectedAddons, setSelectedAddons] = useState<Addon[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Multi-step state
   const [currentStep, setCurrentStep] = useState<Step>('service');
+  const [animationDirection, setAnimationDirection] = useState<AnimationDirection>('none');
+  const [isAnimating, setIsAnimating] = useState(false);
   const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [selectedStylist, setSelectedStylist] = useState<Stylist | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
@@ -331,9 +453,22 @@ export default function BookingPage() {
     phone: '',
     email: '',
     notes: '',
+    preferred_time: '',
   });
   const [formErrors, setFormErrors] = useState<Partial<BookingFormData>>({});
   const [submitting, setSubmitting] = useState(false);
+
+  // Animate step transition
+  const animateToStep = useCallback((newStep: Step, direction: AnimationDirection = 'right') => {
+    setIsAnimating(true);
+    setAnimationDirection(direction);
+    
+    setTimeout(() => {
+      setCurrentStep(newStep);
+      setIsAnimating(false);
+      setAnimationDirection('none');
+    }, 200);
+  }, []);
 
   // Load salon data
   useEffect(() => {
@@ -345,6 +480,9 @@ export default function BookingPage() {
         setError('Salon nicht gefunden');
       } else {
         setSalon(data);
+        if (data.addons && data.addons.length > 0) {
+          setAddons(data.addons);
+        }
       }
       setLoading(false);
     }
@@ -384,24 +522,24 @@ export default function BookingPage() {
     const stepOrder: Step[] = ['service', 'stylist', 'date', 'time', 'info', 'confirm'];
     const currentIndex = stepOrder.indexOf(currentStep);
     if (currentIndex < stepOrder.length - 1) {
-      setCurrentStep(stepOrder[currentIndex + 1]);
+      animateToStep(stepOrder[currentIndex + 1], 'right');
     }
-  }, [currentStep]);
+  }, [currentStep, animateToStep]);
 
   const prevStep = useCallback(() => {
     const stepOrder: Step[] = ['service', 'stylist', 'date', 'time', 'info', 'confirm'];
     const currentIndex = stepOrder.indexOf(currentStep);
     if (currentIndex > 0) {
-      setCurrentStep(stepOrder[currentIndex - 1]);
+      animateToStep(stepOrder[currentIndex - 1], 'left');
     }
-  }, [currentStep]);
+  }, [currentStep, animateToStep]);
 
   const canProceed = (): boolean => {
     switch (currentStep) {
       case 'service':
         return !!selectedService;
       case 'stylist':
-        return !!selectedStylist;
+        return true; // Stylist is optional
       case 'date':
         return !!selectedDate;
       case 'time':
@@ -444,7 +582,7 @@ export default function BookingPage() {
   };
 
   const handleSubmit = async () => {
-    if (!salon || !selectedService || !selectedStylist || !selectedDate || !selectedTime) {
+    if (!salon || !selectedService || !selectedDate || !selectedTime) {
       return;
     }
 
@@ -453,13 +591,15 @@ export default function BookingPage() {
     const result = await createBooking({
       salon_id: salon.id,
       service_id: selectedService.id,
-      stylist_id: selectedStylist.id,
+      stylist_id: selectedStylist?.id || '',
       date: formatDate(selectedDate),
       time: selectedTime,
       customer_name: formData.customer_name,
       phone: formData.phone,
       email: formData.email || undefined,
       notes: formData.notes || undefined,
+      preferred_time: formData.preferred_time || undefined,
+      addons: selectedAddons.map(a => a.id),
     });
 
     setSubmitting(false);
@@ -468,6 +608,28 @@ export default function BookingPage() {
       router.push(`/verify-booking?token=${result.token}`);
     } else {
       setError('Buchung konnte nicht erstellt werden. Bitte versuchen Sie es erneut.');
+    }
+  };
+
+  const toggleAddon = (addon: Addon) => {
+    setSelectedAddons(prev => 
+      prev.find(a => a.id === addon.id)
+        ? prev.filter(a => a.id !== addon.id)
+        : [...prev, addon]
+    );
+  };
+
+  // Animation classes
+  const getAnimationClass = () => {
+    if (!isAnimating) return 'opacity-100 translate-x-0';
+    
+    switch (animationDirection) {
+      case 'left':
+        return 'opacity-0 -translate-x-8';
+      case 'right':
+        return 'opacity-0 translate-x-8';
+      default:
+        return 'opacity-100 translate-x-0';
     }
   };
 
@@ -510,7 +672,7 @@ export default function BookingPage() {
     <div className="min-h-screen bg-sand-50">
       {/* Header */}
       <header className="bg-white border-b border-sage-100 sticky top-0 z-10">
-        <div className="max-w-lg mx-auto px-4 py-4">
+        <div className="max-w-6xl mx-auto px-4 py-4">
           <h1 className="text-xl font-semibold text-sage-900">{salon.name}</h1>
           {salon.description && (
             <p className="text-sm text-sage-600 mt-1 line-clamp-1">{salon.description}</p>
@@ -518,439 +680,553 @@ export default function BookingPage() {
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="max-w-lg mx-auto px-4 py-8">
-        <StepIndicator currentStep={currentStep} steps={steps} />
+      {/* Main Content - Different layout for confirm step */}
+      <main className={`max-w-6xl mx-auto px-4 py-8 ${currentStep === 'confirm' ? 'lg:flex lg:gap-8' : ''}`}>
+        <div className={currentStep === 'confirm' ? 'flex-1' : ''}>
+          <StepIndicator currentStep={currentStep} steps={steps} />
 
-        {/* Error Banner */}
-        {error && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
-            {error}
-          </div>
-        )}
-
-        {/* Step Content */}
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-sage-100">
-          {/* Step 1: Select Service */}
-          {currentStep === 'service' && (
-            <div>
-              <h2 className="text-lg font-semibold text-sage-900 mb-4">
-                Wählen Sie Ihren Service
-              </h2>
-              <div className="space-y-3">
-                {salon.services.map((service) => (
-                  <button
-                    key={service.id}
-                    type="button"
-                    onClick={() => {
-                      setSelectedService(service);
-                      setSelectedStylist(null);
-                      setSelectedDate(null);
-                      setSelectedTime(null);
-                    }}
-                    className={`
-                      w-full p-4 rounded-xl border-2 text-left transition-all duration-150
-                      ${
-                        selectedService?.id === service.id
-                          ? 'border-sage-600 bg-sage-50'
-                          : 'border-sage-100 hover:border-sage-200'
-                      }
-                    `}
-                  >
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <p className="font-medium text-sage-900">{service.name}</p>
-                        <p className="text-sm text-sage-500 mt-1">
-                          {service.duration_min} Minuten
-                        </p>
-                      </div>
-                      <p className="font-semibold text-sage-700">
-                        €{service.price.toFixed(2)}
-                      </p>
-                    </div>
-                  </button>
-                ))}
-              </div>
+          {/* Error Banner */}
+          {error && (
+            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
+              {error}
             </div>
           )}
 
-          {/* Step 2: Select Stylist */}
-          {currentStep === 'stylist' && (
-            <div>
-              <h2 className="text-lg font-semibold text-sage-900 mb-4">
-                Wählen Sie Ihren Stylist
-              </h2>
-              {salon.stylists.length === 0 ? (
-                <div className="text-center py-8">
-                  <p className="text-sage-500">Keine Stylisten verfügbar</p>
-                </div>
-              ) : (
+          {/* Step Content with Animation */}
+          <div 
+            className={`bg-white rounded-2xl p-6 shadow-sm border border-sage-100 transition-all duration-200 ease-out ${getAnimationClass()}`}
+          >
+            {/* Step 1: Select Service */}
+            {currentStep === 'service' && (
+              <div>
+                <h2 className="text-lg font-semibold text-sage-900 mb-4">
+                  Wählen Sie Ihren Service
+                </h2>
                 <div className="space-y-3">
-                  {salon.stylists.map((stylist) => (
+                  {salon.services.map((service) => (
                     <button
-                      key={stylist.id}
+                      key={service.id}
                       type="button"
                       onClick={() => {
-                        setSelectedStylist(stylist);
+                        setSelectedService(service);
+                        setSelectedStylist(null);
                         setSelectedDate(null);
                         setSelectedTime(null);
                       }}
                       className={`
                         w-full p-4 rounded-xl border-2 text-left transition-all duration-150
                         ${
-                          selectedStylist?.id === stylist.id
+                          selectedService?.id === service.id
                             ? 'border-sage-600 bg-sage-50'
                             : 'border-sage-100 hover:border-sage-200'
                         }
                       `}
                     >
-                      <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-full bg-sage-200 flex items-center justify-center">
-                          {stylist.avatar_url ? (
-                            <img
-                              src={stylist.avatar_url}
-                              alt={stylist.name}
-                              className="w-full h-full rounded-full object-cover"
-                            />
-                          ) : (
-                            <span className="text-lg font-medium text-sage-700">
-                              {stylist.name.charAt(0)}
-                            </span>
-                          )}
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <p className="font-medium text-sage-900">{service.name}</p>
+                          <p className="text-sm text-sage-500 mt-1">
+                            {service.duration_min} Minuten
+                          </p>
                         </div>
-                        <p className="font-medium text-sage-900">{stylist.name}</p>
+                        <p className="font-semibold text-sage-700">
+                          €{service.price.toFixed(2)}
+                        </p>
                       </div>
                     </button>
                   ))}
                 </div>
-              )}
-              <div className="mt-4">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedStylist(null);
-                    setSelectedDate(null);
-                    setSelectedTime(null);
-                  }}
-                  className="text-sm text-sage-600 hover:text-sage-700"
-                >
-                  Keine Präferenz
-                </button>
-              </div>
-            </div>
-          )}
 
-          {/* Step 3: Pick Date */}
-          {currentStep === 'date' && (
-            <div>
-              <h2 className="text-lg font-semibold text-sage-900 mb-4">
-                Wählen Sie Ihr Datum
-              </h2>
-              <Calendar
-                selectedDate={selectedDate}
-                onSelect={(date) => {
-                  setSelectedDate(date);
-                  setSelectedTime(null);
-                }}
-              />
-            </div>
-          )}
-
-          {/* Step 4: Pick Time */}
-          {currentStep === 'time' && (
-            <div>
-              <h2 className="text-lg font-semibold text-sage-900 mb-4">
-                Wählen Sie Ihre Zeit
-              </h2>
-              {selectedDate && (
-                <p className="text-sm text-sage-600 mb-4">
-                  {formatDisplayDate(selectedDate)}
-                </p>
-              )}
-              {loadingSlots ? (
-                <div className="grid grid-cols-3 gap-2">
-                  {[...Array(9)].map((_, i) => (
-                    <div
-                      key={i}
-                      className="h-12 bg-sage-100 rounded-xl animate-pulse"
-                    />
-                  ))}
-                </div>
-              ) : timeSlots.length === 0 ? (
-                <div className="text-center py-8">
-                  <p className="text-sage-500 mb-2">Keine Termine verfügbar</p>
-                  <p className="text-sm text-sage-400">
-                    Bitte wählen Sie ein anderes Datum
-                  </p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-3 gap-2">
-                  {timeSlots.map((slot) => (
-                    <button
-                      key={slot.time}
-                      type="button"
-                      disabled={!slot.available}
-                      onClick={() => setSelectedTime(slot.time)}
-                      className={`
-                        py-3 rounded-xl font-medium text-sm transition-all duration-150
-                        ${
-                          selectedTime === slot.time
-                            ? 'bg-sage-600 text-white shadow-md'
-                            : slot.available
-                            ? 'bg-sage-50 text-sage-700 hover:bg-sage-100'
-                            : 'bg-sage-50 text-sage-300 cursor-not-allowed line-through'
-                        }
-                      `}
-                    >
-                      {formatTime(slot.time)}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Step 5: Enter Info */}
-          {currentStep === 'info' && (
-            <div>
-              <h2 className="text-lg font-semibold text-sage-900 mb-4">
-                Ihre Daten
-              </h2>
-              <div className="space-y-4">
-                <div>
-                  <label
-                    htmlFor="customer_name"
-                    className="block text-sm font-medium text-sage-700 mb-1"
-                  >
-                    Name *
-                  </label>
-                  <input
-                    type="text"
-                    id="customer_name"
-                    value={formData.customer_name}
-                    onChange={(e) =>
-                      setFormData({ ...formData, customer_name: e.target.value })
-                    }
-                    className={`
-                      w-full px-4 py-3 rounded-xl border-2 bg-white text-sage-900 placeholder-sage-400
-                      focus:outline-none focus:border-sage-500 transition-colors
-                      ${formErrors.customer_name ? 'border-red-400' : 'border-sage-200'}
-                    `}
-                    placeholder="Maria Muster"
-                  />
-                  {formErrors.customer_name && (
-                    <p className="text-red-500 text-sm mt-1">
-                      {formErrors.customer_name}
-                    </p>
-                  )}
-                </div>
-
-                <div>
-                  <label
-                    htmlFor="phone"
-                    className="block text-sm font-medium text-sage-700 mb-1"
-                  >
-                    Telefon *
-                  </label>
-                  <input
-                    type="tel"
-                    id="phone"
-                    value={formData.phone}
-                    onChange={(e) =>
-                      setFormData({ ...formData, phone: e.target.value })
-                    }
-                    className={`
-                      w-full px-4 py-3 rounded-xl border-2 bg-white text-sage-900 placeholder-sage-400
-                      focus:outline-none focus:border-sage-500 transition-colors
-                      ${formErrors.phone ? 'border-red-400' : 'border-sage-200'}
-                    `}
-                    placeholder="+43 123 456789"
-                  />
-                  {formErrors.phone && (
-                    <p className="text-red-500 text-sm mt-1">{formErrors.phone}</p>
-                  )}
-                </div>
-
-                <div>
-                  <label
-                    htmlFor="email"
-                    className="block text-sm font-medium text-sage-700 mb-1"
-                  >
-                    E-Mail (optional)
-                  </label>
-                  <input
-                    type="email"
-                    id="email"
-                    value={formData.email}
-                    onChange={(e) =>
-                      setFormData({ ...formData, email: e.target.value })
-                    }
-                    className={`
-                      w-full px-4 py-3 rounded-xl border-2 bg-white text-sage-900 placeholder-sage-400
-                      focus:outline-none focus:border-sage-500 transition-colors
-                      ${formErrors.email ? 'border-red-400' : 'border-sage-200'}
-                    `}
-                    placeholder="maria@example.at"
-                  />
-                  {formErrors.email && (
-                    <p className="text-red-500 text-sm mt-1">{formErrors.email}</p>
-                  )}
-                </div>
-
-                <div>
-                  <label
-                    htmlFor="notes"
-                    className="block text-sm font-medium text-sage-700 mb-1"
-                  >
-                    Anmerkungen (optional)
-                  </label>
-                  <textarea
-                    id="notes"
-                    value={formData.notes}
-                    onChange={(e) =>
-                      setFormData({ ...formData, notes: e.target.value })
-                    }
-                    rows={3}
-                    className="w-full px-4 py-3 rounded-xl border-2 border-sage-200 bg-white text-sage-900 placeholder-sage-400 focus:outline-none focus:border-sage-500 transition-colors resize-none"
-                    placeholder="Besondere Wünsche oder Hinweise..."
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Step 6: Confirm */}
-          {currentStep === 'confirm' && (
-            <div>
-              <h2 className="text-lg font-semibold text-sage-900 mb-4">
-                Buchung bestätigen
-              </h2>
-              <div className="bg-sage-50 rounded-xl p-4 space-y-3">
-                <div className="flex justify-between">
-                  <span className="text-sage-600">Service</span>
-                  <span className="font-medium text-sage-900">
-                    {selectedService?.name}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-sage-600">Stylist</span>
-                  <span className="font-medium text-sage-900">
-                    {selectedStylist?.name || 'Keine Präferenz'}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-sage-600">Datum</span>
-                  <span className="font-medium text-sage-900">
-                    {selectedDate ? formatDisplayDate(selectedDate) : '-'}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-sage-600">Zeit</span>
-                  <span className="font-medium text-sage-900">
-                    {selectedTime ? formatTime(selectedTime) : '-'}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-sage-600">Name</span>
-                  <span className="font-medium text-sage-900">
-                    {formData.customer_name}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-sage-600">Telefon</span>
-                  <span className="font-medium text-sage-900">{formData.phone}</span>
-                </div>
-                {formData.email && (
-                  <div className="flex justify-between">
-                    <span className="text-sage-600">E-Mail</span>
-                    <span className="font-medium text-sage-900">{formData.email}</span>
+                {/* Add-ons Section */}
+                {selectedService && (
+                  <div className="mt-8 pt-6 border-t border-sage-100">
+                    <h3 className="text-lg font-semibold text-sage-900 mb-4">
+                      Add-ons
+                    </h3>
+                    <div className="grid grid-cols-2 gap-3">
+                      {addons.map((addon) => {
+                        const isSelected = selectedAddons.find(a => a.id === addon.id);
+                        return (
+                          <button
+                            key={addon.id}
+                            type="button"
+                            onClick={() => toggleAddon(addon)}
+                            className={`
+                              p-4 rounded-xl border-2 text-left transition-all duration-150
+                              ${isSelected
+                                ? 'border-sage-600 bg-sage-50'
+                                : 'border-sage-100 hover:border-sage-200'
+                              }
+                            `}
+                          >
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <p className="font-medium text-sage-900">{addon.name}</p>
+                                <p className="text-sm text-sage-500 mt-1">
+                                  +€{addon.price.toFixed(2)}
+                                </p>
+                              </div>
+                              {isSelected && (
+                                <div className="w-5 h-5 bg-sage-600 rounded-full flex items-center justify-center">
+                                  <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                  </svg>
+                                </div>
+                              )}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
-                <div className="border-t border-sage-200 pt-3 flex justify-between">
-                  <span className="text-sage-600">Preis</span>
-                  <span className="font-semibold text-sage-900">
-                    €{selectedService?.price.toFixed(2)}
-                  </span>
+              </div>
+            )}
+
+            {/* Step 2: Select Stylist */}
+            {currentStep === 'stylist' && (
+              <div>
+                <h2 className="text-lg font-semibold text-sage-900 mb-4">
+                  Wählen Sie Ihren Stylist
+                </h2>
+                {salon.stylists.length === 0 ? (
+                  <div className="text-center py-8">
+                    <p className="text-sage-500">Keine Stylisten verfügbar</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {salon.stylists.map((stylist) => (
+                      <button
+                        key={stylist.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedStylist(stylist);
+                          setSelectedDate(null);
+                          setSelectedTime(null);
+                        }}
+                        className={`
+                          w-full p-4 rounded-xl border-2 text-left transition-all duration-150
+                          ${
+                            selectedStylist?.id === stylist.id
+                              ? 'border-sage-600 bg-sage-50'
+                              : 'border-sage-100 hover:border-sage-200'
+                          }
+                        `}
+                      >
+                        <div className="flex items-center gap-4">
+                          <div className="w-12 h-12 rounded-full bg-sage-200 flex items-center justify-center">
+                            {stylist.avatar_url ? (
+                              <img
+                                src={stylist.avatar_url}
+                                alt={stylist.name}
+                                className="w-full h-full rounded-full object-cover"
+                              />
+                            ) : (
+                              <span className="text-lg font-medium text-sage-700">
+                                {stylist.name.charAt(0)}
+                              </span>
+                            )}
+                          </div>
+                          <p className="font-medium text-sage-900">{stylist.name}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <div className="mt-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedStylist(null);
+                      setSelectedDate(null);
+                      setSelectedTime(null);
+                    }}
+                    className={`text-sm transition-colors ${
+                      !selectedStylist 
+                        ? 'text-sage-600 font-medium' 
+                        : 'text-sage-500 hover:text-sage-600'
+                    }`}
+                  >
+                    Keine Präferenz
+                  </button>
                 </div>
               </div>
-              <p className="text-xs text-sage-500 mt-4 text-center">
-                Mit der Buchung stimmen Sie unseren AGB zu. Sie erhalten eine
-                Bestätigung per SMS.
-              </p>
-            </div>
-          )}
+            )}
 
-          {/* Navigation Buttons */}
-          <div className="flex gap-3 mt-6">
-            {currentStep !== 'service' && (
-              <button
-                type="button"
-                onClick={prevStep}
-                className="flex-1 py-3 px-4 rounded-xl border-2 border-sage-200 text-sage-700 font-medium hover:bg-sage-50 transition-colors"
-              >
-                Zurück
-              </button>
+            {/* Step 3: Pick Date */}
+            {currentStep === 'date' && (
+              <div>
+                <h2 className="text-lg font-semibold text-sage-900 mb-4">
+                  Wählen Sie Ihr Datum
+                </h2>
+                <Calendar
+                  selectedDate={selectedDate}
+                  onSelect={(date) => {
+                    setSelectedDate(date);
+                    setSelectedTime(null);
+                  }}
+                />
+              </div>
             )}
-            {currentStep !== 'confirm' ? (
-              <button
-                type="button"
-                onClick={handleNext}
-                disabled={!canProceed()}
-                className={`
-                  flex-1 py-3 px-4 rounded-xl font-medium transition-all duration-150
-                  ${
-                    canProceed()
-                      ? 'bg-sage-600 text-white hover:bg-sage-700 shadow-md'
-                      : 'bg-sage-200 text-sage-400 cursor-not-allowed'
-                  }
-                `}
-              >
-                Weiter
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={handleSubmit}
-                disabled={submitting}
-                className={`
-                  flex-1 py-3 px-4 rounded-xl font-medium transition-all duration-150
-                  ${
-                    submitting
-                      ? 'bg-sage-300 text-white cursor-not-allowed'
-                      : 'bg-sage-600 text-white hover:bg-sage-700 shadow-md'
-                  }
-                `}
-              >
-                {submitting ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <svg
-                      className="w-5 h-5 animate-spin"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                    >
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                      />
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                      />
-                    </svg>
-                    Buchen...
-                  </span>
-                ) : (
-                  'Jetzt buchen'
+
+            {/* Step 4: Pick Time */}
+            {currentStep === 'time' && (
+              <div>
+                <h2 className="text-lg font-semibold text-sage-900 mb-4">
+                  Wählen Sie Ihre Zeit
+                </h2>
+                {selectedDate && (
+                  <p className="text-sm text-sage-600 mb-4">
+                    {formatDisplayDate(selectedDate)}
+                  </p>
                 )}
-              </button>
+                
+                {/* Preferred Time Dropdown */}
+                <div className="mb-6">
+                  <label
+                    htmlFor="preferred_time"
+                    className="block text-sm font-medium text-sage-700 mb-2"
+                  >
+                    Bevorzugte Tageszeit (optional)
+                  </label>
+                  <select
+                    id="preferred_time"
+                    value={formData.preferred_time}
+                    onChange={(e) =>
+                      setFormData({ ...formData, preferred_time: e.target.value as 'morning' | 'afternoon' | 'evening' | '' })
+                    }
+                    className="w-full px-4 py-3 rounded-xl border-2 border-sage-200 bg-white text-sage-900 focus:outline-none focus:border-sage-500 transition-colors"
+                  >
+                    <option value="">Keine Präferenz</option>
+                    <option value="morning">Vormittag (8-12 Uhr)</option>
+                    <option value="afternoon">Nachmittag (12-17 Uhr)</option>
+                    <option value="evening">Abend (17-20 Uhr)</option>
+                  </select>
+                </div>
+
+                {loadingSlots ? (
+                  <div className="grid grid-cols-3 gap-2">
+                    {[...Array(9)].map((_, i) => (
+                      <div
+                        key={i}
+                        className="h-12 bg-sage-100 rounded-xl animate-pulse"
+                      />
+                    ))}
+                  </div>
+                ) : timeSlots.length === 0 ? (
+                  <div className="text-center py-8">
+                    <p className="text-sage-500 mb-2">Keine Termine verfügbar</p>
+                    <p className="text-sm text-sage-400">
+                      Bitte wählen Sie ein anderes Datum
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-3 gap-2">
+                    {timeSlots.map((slot) => (
+                      <button
+                        key={slot.time}
+                        type="button"
+                        disabled={!slot.available}
+                        onClick={() => setSelectedTime(slot.time)}
+                        className={`
+                          py-3 rounded-xl font-medium text-sm transition-all duration-150
+                          ${
+                            selectedTime === slot.time
+                              ? 'bg-sage-600 text-white shadow-md'
+                              : slot.available
+                              ? 'bg-sage-50 text-sage-700 hover:bg-sage-100'
+                              : 'bg-sage-50 text-sage-300 cursor-not-allowed line-through'
+                          }
+                        `}
+                      >
+                        {formatTime(slot.time)}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             )}
+
+            {/* Step 5: Enter Info */}
+            {currentStep === 'info' && (
+              <div>
+                <h2 className="text-lg font-semibold text-sage-900 mb-4">
+                  Ihre Daten
+                </h2>
+                <div className="space-y-4">
+                  <div>
+                    <label
+                      htmlFor="customer_name"
+                      className="block text-sm font-medium text-sage-700 mb-1"
+                    >
+                      Name *
+                    </label>
+                    <input
+                      type="text"
+                      id="customer_name"
+                      value={formData.customer_name}
+                      onChange={(e) =>
+                        setFormData({ ...formData, customer_name: e.target.value })
+                      }
+                      className={`
+                        w-full px-4 py-3 rounded-xl border-2 bg-white text-sage-900 placeholder-sage-400
+                        focus:outline-none focus:border-sage-500 transition-colors
+                        ${formErrors.customer_name ? 'border-red-400' : 'border-sage-200'}
+                      `}
+                      placeholder="Maria Muster"
+                    />
+                    {formErrors.customer_name && (
+                      <p className="text-red-500 text-sm mt-1">
+                        {formErrors.customer_name}
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label
+                      htmlFor="phone"
+                      className="block text-sm font-medium text-sage-700 mb-1"
+                    >
+                      Telefon *
+                    </label>
+                    <input
+                      type="tel"
+                      id="phone"
+                      value={formData.phone}
+                      onChange={(e) =>
+                        setFormData({ ...formData, phone: e.target.value })
+                      }
+                      className={`
+                        w-full px-4 py-3 rounded-xl border-2 bg-white text-sage-900 placeholder-sage-400
+                        focus:outline-none focus:border-sage-500 transition-colors
+                        ${formErrors.phone ? 'border-red-400' : 'border-sage-200'}
+                      `}
+                      placeholder="+43 123 456789"
+                    />
+                    {formErrors.phone && (
+                      <p className="text-red-500 text-sm mt-1">{formErrors.phone}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label
+                      htmlFor="email"
+                      className="block text-sm font-medium text-sage-700 mb-1"
+                    >
+                      E-Mail (optional)
+                    </label>
+                    <input
+                      type="email"
+                      id="email"
+                      value={formData.email}
+                      onChange={(e) =>
+                        setFormData({ ...formData, email: e.target.value })
+                      }
+                      className={`
+                        w-full px-4 py-3 rounded-xl border-2 bg-white text-sage-900 placeholder-sage-400
+                        focus:outline-none focus:border-sage-500 transition-colors
+                        ${formErrors.email ? 'border-red-400' : 'border-sage-200'}
+                      `}
+                      placeholder="maria@example.at"
+                    />
+                    {formErrors.email && (
+                      <p className="text-red-500 text-sm mt-1">{formErrors.email}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label
+                      htmlFor="notes"
+                      className="block text-sm font-medium text-sage-700 mb-1"
+                    >
+                      Anmerkungen (optional)
+                    </label>
+                    <textarea
+                      id="notes"
+                      value={formData.notes}
+                      onChange={(e) =>
+                        setFormData({ ...formData, notes: e.target.value })
+                      }
+                      rows={3}
+                      className="w-full px-4 py-3 rounded-xl border-2 border-sage-200 bg-white text-sage-900 placeholder-sage-400 focus:outline-none focus:border-sage-500 transition-colors resize-none"
+                      placeholder="Besondere Wünsche oder Hinweise..."
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Step 6: Confirm */}
+            {currentStep === 'confirm' && (
+              <div>
+                <h2 className="text-lg font-semibold text-sage-900 mb-4">
+                  Buchung bestätigen
+                </h2>
+                <div className="bg-sage-50 rounded-xl p-4 space-y-3">
+                  <div className="flex justify-between">
+                    <span className="text-sage-600">Service</span>
+                    <span className="font-medium text-sage-900">
+                      {selectedService?.name}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sage-600">Stylist</span>
+                    <span className="font-medium text-sage-900">
+                      {selectedStylist?.name || 'Keine Präferenz'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sage-600">Datum</span>
+                    <span className="font-medium text-sage-900">
+                      {selectedDate ? formatDisplayDate(selectedDate) : '-'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sage-600">Zeit</span>
+                    <span className="font-medium text-sage-900">
+                      {selectedTime ? formatTime(selectedTime) : '-'}
+                    </span>
+                  </div>
+                  {formData.preferred_time && (
+                    <div className="flex justify-between">
+                      <span className="text-sage-600">Präferenz</span>
+                      <span className="font-medium text-sage-900">
+                        {formData.preferred_time === 'morning' ? 'Vormittag' : 
+                         formData.preferred_time === 'afternoon' ? 'Nachmittag' : 'Abend'}
+                      </span>
+                    </div>
+                  )}
+                  {selectedAddons.length > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-sage-600">Add-ons</span>
+                      <span className="font-medium text-sage-900">
+                        {selectedAddons.map(a => a.name).join(', ')}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex justify-between">
+                    <span className="text-sage-600">Name</span>
+                    <span className="font-medium text-sage-900">
+                      {formData.customer_name}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sage-600">Telefon</span>
+                    <span className="font-medium text-sage-900">{formData.phone}</span>
+                  </div>
+                  {formData.email && (
+                    <div className="flex justify-between">
+                      <span className="text-sage-600">E-Mail</span>
+                      <span className="font-medium text-sage-900">{formData.email}</span>
+                    </div>
+                  )}
+                  {formData.notes && (
+                    <div className="border-t border-sage-200 pt-3">
+                      <span className="text-sage-600">Notizen</span>
+                      <p className="font-medium text-sage-900 mt-1 italic">"{formData.notes}"</p>
+                    </div>
+                  )}
+                  <div className="border-t border-sage-200 pt-3 flex justify-between">
+                    <span className="text-sage-600">Preis</span>
+                    <span className="font-semibold text-sage-900">
+                      €{((selectedService?.price || 0) + selectedAddons.reduce((s, a) => s + a.price, 0)).toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+                <p className="text-xs text-sage-500 mt-4 text-center">
+                  Mit der Buchung stimmen Sie unseren AGB zu. Sie erhalten eine
+                  Bestätigung per SMS.
+                </p>
+              </div>
+            )}
+
+            {/* Navigation Buttons */}
+            <div className="flex gap-3 mt-6">
+              {currentStep !== 'service' && (
+                <button
+                  type="button"
+                  onClick={prevStep}
+                  className="flex-1 py-3 px-4 rounded-xl border-2 border-sage-200 text-sage-700 font-medium hover:bg-sage-50 transition-colors"
+                >
+                  Zurück
+                </button>
+              )}
+              {currentStep !== 'confirm' ? (
+                <button
+                  type="button"
+                  onClick={handleNext}
+                  disabled={!canProceed()}
+                  className={`
+                    flex-1 py-3 px-4 rounded-xl font-medium transition-all duration-150
+                    ${
+                      canProceed()
+                        ? 'bg-sage-600 text-white hover:bg-sage-700 shadow-md'
+                        : 'bg-sage-200 text-sage-400 cursor-not-allowed'
+                    }
+                  `}
+                >
+                  Weiter
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleSubmit}
+                  disabled={submitting}
+                  className={`
+                    flex-1 py-3 px-4 rounded-xl font-medium transition-all duration-150
+                    ${
+                      submitting
+                        ? 'bg-sage-300 text-white cursor-not-allowed'
+                        : 'bg-sage-600 text-white hover:bg-sage-700 shadow-md'
+                    }
+                  `}
+                >
+                  {submitting ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <svg
+                        className="w-5 h-5 animate-spin"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        />
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        />
+                      </svg>
+                      Buchen...
+                    </span>
+                  ) : (
+                    'Jetzt buchen'
+                  )}
+                </button>
+              )}
+            </div>
           </div>
         </div>
+
+        {/* Booking Summary Sidebar - Only on confirm step */}
+        {currentStep === 'confirm' && (
+          <div className="hidden lg:block w-80 flex-shrink-0">
+            <BookingSummarySidebar
+              service={selectedService}
+              stylist={selectedStylist}
+              date={selectedDate}
+              time={selectedTime}
+              addons={selectedAddons}
+              preferredTime={formData.preferred_time}
+              notes={formData.notes}
+            />
+          </div>
+        )}
       </main>
 
       {/* Footer */}
