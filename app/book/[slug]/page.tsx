@@ -82,7 +82,8 @@ async function fetchSlots(
     });
     const res = await fetch(`/api/slots?${params}`);
     if (!res.ok) return [];
-    return res.json();
+    const data = await res.json();
+    return data.slots ?? [];
   } catch {
     return [];
   }

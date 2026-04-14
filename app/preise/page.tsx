@@ -88,6 +88,13 @@ function formatPrice(netto: number) {
   return { netto, mwst, brutto };
 }
 
+// Canonical prices (brutto, endkundenpreise)
+const CANONICAL = {
+  starter: 49,
+  business: 89,
+  premium: 149,
+} as const;
+
 export default function PreisePage() {
   return (
     <div className="bg-sand-50">

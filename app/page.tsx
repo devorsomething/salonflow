@@ -249,7 +249,7 @@ export default function Home() {
                 <span className="text-sage-500">/Monat</span>
               </div>
               <ul className="space-y-3 mb-8">
-                {['Online Buchung', 'SMS-Erinnerungen', 'Bis zu 2 Stylisten', 'Kundenverwaltung'].map(f => (
+                {['Online Terminbuchung', 'SMS-Erinnerungen', 'Bis zu 2 Stylisten', 'Kundenverwaltung'].map(f => (
                   <li key={f} className="flex items-center gap-2 text-sm text-sage-700">
                     <svg className="w-5 h-5 text-sage-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
