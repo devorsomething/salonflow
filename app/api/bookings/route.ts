@@ -1,30 +1,20 @@
 import { NextResponse } from 'next/server';
-import { DEMO_BOOKINGS, DEMO_SERVICES, DEMO_STYLISTS } from '@/lib/demo';
+import { getAppointments, createAppointment, getAppointmentById } from '@/lib/db';
+import { DEMO_SALON } from '@/lib/demo';
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const salonSlug = searchParams.get('salonSlug');
-    const date = searchParams.get('date');
+    const startDate = searchParams.get('startDate');
+    const endDate = searchParams.get('endDate');
 
-    // Demo mode
-    if (!salonSlug || salonSlug.includes('demo')) {
-      const dayBookings = DEMO_BOOKINGS.filter(b => {
-        const bDate = new Date(b.start_time).toISOString().split('T')[0];
-        return bDate === date;
-      });
-
-      const enriched = dayBookings.map(b => ({
-        ...b,
-        service: DEMO_SERVICES.find(s => s.id === b.service_id),
-        stylist: DEMO_STYLISTS.find(s => s.id === b.stylist_id),
-      }));
-
-      return NextResponse.json({ appointments: enriched });
-    }
-
-    return NextResponse.json({ appointments: [] });
+    const appointments = await getAppointments(DEMO_SALON.id as string, {
+      startDate: startDate || undefined,
+      endDate: endDate || undefined,
+    });
+    return NextResponse.json({ appointments });
   } catch (err) {
+    console.error('Bookings GET error:', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -32,44 +22,74 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { salonSlug, serviceId, stylistId, startTime, customerName, customerEmail, customerPhone, notes } = body;
+    const { service_id, stylist_id, start_time, end_time, customer_name, customer_phone, customer_email, notes } = body;
 
-    if (!salonSlug || !serviceId || !startTime || !customerName || !customerPhone) {
+    if (!service_id || !start_time) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    const service = DEMO_SERVICES.find(s => s.id === serviceId);
-    if (!service) {
-      return NextResponse.json({ error: 'Service not found' }, { status: 404 });
+    const result = await createAppointment({
+      salon_id: DEMO_SALON.id as string,
+      service_id,
+      stylist_id: stylist_id || 'stylist-1',
+      start_time,
+      end_time: end_time || start_time,
+      customer_name,
+      customer_phone,
+      customer_email,
+      notes,
+    });
+
+    if (!result) {
+      return NextResponse.json({ error: 'Failed to create booking' }, { status: 500 });
     }
 
-    // Create booking
-    const booking = {
-      id: `booking-${Date.now()}`,
-      salon_id: salonSlug,
-      service_id: serviceId,
-      stylist_id: stylistId || DEMO_STYLISTS[0].id,
-      start_time: startTime,
-      end_time: new Date(new Date(startTime).getTime() + service.duration_minutes * 60000).toISOString(),
-      status: 'pending',
-      customer_name: customerName,
-      customer_email: customerEmail,
-      customer_phone: customerPhone,
-      notes,
-      created_at: new Date().toISOString(),
-    };
+    // Trigger booking confirmation email workflow in n8n (best-effort).
+    // Booking creation should not fail if the external workflow is temporarily unavailable.
+    let confirmationTriggered = false;
+    let confirmationError: string | undefined;
+    try {
+      const appointment = getAppointmentById(result.id) as any;
+      const webhookUrl =
+        process.env.N8N_BOOKING_CONFIRMATION_WEBHOOK_URL ||
+        'https://n8n.devmiro.cloud/webhook/booking-confirmation';
 
-    DEMO_BOOKINGS.push(booking);
+      const payload = {
+        client_name: customer_name || appointment?.customer_name || 'Kunde',
+        client_phone: customer_phone || appointment?.customer_phone || '',
+        client_email: customer_email || appointment?.customer_email || '',
+        service_name: appointment?.service_name || service_id,
+        stylist_name: appointment?.stylist_name || stylist_id || 'Stylist',
+        appointment_time: appointment?.start_time || start_time,
+        salon_name: DEMO_SALON.name || 'SalonFlow Demo',
+      };
 
-    const verifyToken = Buffer.from(`${booking.id}`).toString('base64');
+      const n8nRes = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!n8nRes.ok) {
+        throw new Error(`n8n webhook failed with status ${n8nRes.status}`);
+      }
+
+      confirmationTriggered = true;
+    } catch (err: any) {
+      confirmationError = err?.message || 'n8n confirmation webhook failed';
+      console.error('[BOOKINGS] Confirmation webhook error:', confirmationError);
+    }
 
     return NextResponse.json({
       success: true,
-      bookingId: booking.id,
-      verifyToken,
-      message: 'Booking created in demo mode'
+      bookingId: result.id,
+      verifyToken: result.id,
+      message: 'Termin gebucht',
+      confirmationTriggered,
+      ...(confirmationError ? { confirmationError } : {}),
     });
   } catch (err) {
+    console.error('Bookings POST error:', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
