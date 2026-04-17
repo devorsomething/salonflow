@@ -31,6 +31,9 @@ export default function LoginPage() {
       }
 
       if (data.success) {
+        // Store token in localStorage for auth
+        localStorage.setItem('salonflow_token', data.token);
+        localStorage.setItem('salonflow_user', JSON.stringify(data.user));
         router.push("/admin");
         return;
       }

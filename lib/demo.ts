@@ -21,9 +21,9 @@ export const DEMO_SERVICES = [
 ];
 
 export const DEMO_STYLISTS = [
-  { id: 'stylist-1', name: 'Maria', avatar_url: null, active: true },
-  { id: 'stylist-2', name: 'Thomas', avatar_url: null, active: true },
-  { id: 'stylist-3', name: 'Lisa', avatar_url: null, active: true },
+  { id: 'stylist-1', name: 'Maria', avatar_url: undefined, active: true },
+  { id: 'stylist-2', name: 'Thomas', avatar_url: undefined, active: true },
+  { id: 'stylist-3', name: 'Lisa', avatar_url: undefined, active: true },
 ];
 
 export const DEMO_BOOKINGS: Array<{
@@ -37,6 +37,7 @@ export const DEMO_BOOKINGS: Array<{
   customer_phone: string;
   customer_email: string;
   notes?: string;
+  created_at?: string;
 }> = [];
 
 export function generateTimeSlots(serviceId: string, stylistId: string | null, date: string) {

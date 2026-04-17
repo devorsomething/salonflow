@@ -1,49 +1,41 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { DEMO_SALON, DEMO_SERVICES, DEMO_STYLISTS } from '@/lib/demo';
+import { getSalon, getSalonServices, getSalonStylists } from '@/lib/db';
 
-function verifyDemoSession(request: Request): { valid: boolean; salonSlug?: string } {
-  const cookieHeader = request.headers.get('cookie') || '';
-  const cookies = Object.fromEntries(
-    cookieHeader.split('; ').map(c => {
-      const [k, ...v] = c.split('=');
-      return [k, v.join('=')];
-    })
-  );
-
-  const sessionCookie = cookies['salonflow_session'];
-  if (!sessionCookie) return { valid: false };
-
-  try {
-    const session = JSON.parse(Buffer.from(sessionCookie, 'base64').toString());
-    if (session.email && session.salonId) {
-      return { valid: true, salonSlug: session.salonId };
-    }
-  } catch {
-    // Invalid session
-  }
-  return { valid: false };
+function getToken(request: Request): string | null {
+  const authHeader = request.headers.get('Authorization');
+  if (authHeader?.startsWith('Bearer ')) return authHeader.slice(7);
+  return null;
 }
 
 export async function GET(request: Request) {
   try {
-    // Verify session
-    const { valid } = verifyDemoSession(request);
-    if (!valid) {
+    const token = getToken(request);
+    if (!token) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Return demo salon data with services and stylists
+    const salon = await getSalon('demo-salon') as any;
+    if (!salon) {
+      return NextResponse.json({ error: 'Salon nicht gefunden' }, { status: 404 });
+    }
+
+    const services = (await getSalonServices()).map((s: any) => ({
+      id: s.id,
+      name: s.name,
+      duration_min: s.duration_minutes,
+      price_cents: s.price_cents,
+      category: s.category,
+    }));
+
+    const stylists = await getSalonStylists(salon.id);
+
     return NextResponse.json({
-      ...DEMO_SALON,
-      services: DEMO_SERVICES.map(s => ({
-        id: s.id,
-        name: s.name,
-        duration_min: s.duration_minutes,
-        price_cents: s.price_cents,
-      })),
-      stylists: DEMO_STYLISTS,
+      ...salon,
+      services,
+      stylists,
     });
   } catch (err) {
+    console.error('Salon API error:', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

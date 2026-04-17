@@ -1,56 +1,26 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
-import { validateAdminAuth } from '@/lib/auth';
+import { NextResponse } from 'next/server';
+import { getCustomers } from '@/lib/db';
 
-// GET /api/customers - List all customers (admin)
-export async function GET(request: NextRequest) {
-  const { userId, error } = await validateAdminAuth(request);
-  
-  if (error) return error;
+function getToken(request: Request): string | null {
+  const authHeader = request.headers.get('Authorization');
+  if (authHeader?.startsWith('Bearer ')) return authHeader.slice(7);
+  return null;
+}
 
+export async function GET(request: Request) {
   try {
-    const { searchParams } = new URL(request.url);
-    const salonId = searchParams.get('salon_id');
-    const search = searchParams.get('search');
-    const limit = parseInt(searchParams.get('limit') || '50', 10);
-    const offset = parseInt(searchParams.get('offset') || '0', 10);
-
-    let query = supabase
-      .from('customers')
-      .select(`
-        *,
-        appointments:appointments(id, start_time, status, service_id),
-        preferred_stylist:stylists(id, first_name, last_name)
-      `, { count: 'exact' })
-      .order('last_name', { ascending: true })
-      .order('first_name', { ascending: true })
-      .range(offset, offset + limit - 1);
-
-    if (salonId) {
-      query = query.eq('salon_id', salonId);
+    const token = getToken(request);
+    if (!token) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (search) {
-      // Search by name, email, or phone
-      query = query.or(
-        `first_name.ilike.%${search}%,last_name.ilike.%${search}%,email.ilike.%${search}%,phone.ilike.%${search}%`
-      );
-    }
-
-    const { data, error: dbError, count } = await query;
-
-    if (dbError) {
-      return NextResponse.json({ error: dbError.message }, { status: 400 });
-    }
-
+    const customers = await getCustomers();
     return NextResponse.json({
-      data,
-      total: count ?? data.length,
-      offset,
-      limit,
+      data: customers,
+      total: customers.length,
     });
   } catch (err) {
-    console.error('GET /api/customers error:', err);
+    console.error('Customers GET error:', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

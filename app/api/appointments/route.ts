@@ -1,102 +1,87 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { DEMO_BOOKINGS, DEMO_SERVICES, DEMO_STYLISTS } from '@/lib/demo';
+import { NextResponse } from 'next/server';
+import { getAppointments, createAppointment, updateAppointment, getAppointmentById, getCustomers } from '@/lib/db';
 
-function verifyDemoSession(request: Request): boolean {
-  const cookieHeader = request.headers.get('cookie') || '';
-  const cookies = Object.fromEntries(
-    cookieHeader.split('; ').map(c => {
-      const [k, ...v] = c.split('=');
-      return [k, v.join('=')];
-    })
-  );
-  return !!cookies['salonflow_session'];
+function getToken(request: Request): string | null {
+  const authHeader = request.headers.get('Authorization');
+  if (authHeader?.startsWith('Bearer ')) return authHeader.slice(7);
+  return null;
+}
+
+function verifySession(request: Request): boolean {
+  return !!getToken(request);
+}
+
+// Demo salon ID for SQLite
+const DEMO_SALON_ID = 'demo-salon-001';
+
+async function fetchCustomerById(customerId: string) {
+  const customers = await getCustomers(DEMO_SALON_ID);
+  const list = Array.isArray(customers) ? customers : (customers as any)?.data || [];
+  return list.find((customer: any) => customer.id === customerId) || null;
 }
 
 export async function GET(request: Request) {
   try {
-    if (!verifyDemoSession(request)) {
+    if (!verifySession(request)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const { searchParams } = new URL(request.url);
-    const date = searchParams.get('date');
+    const startDate = searchParams.get('startDate');
+    const endDate = searchParams.get('endDate');
 
-    let bookings = [...DEMO_BOOKINGS];
-
-    if (date) {
-      bookings = bookings.filter(b => {
-        const bDate = new Date(b.start_time).toISOString().split('T')[0];
-        return bDate === date;
-      });
-    }
-
-    const enriched = bookings.map(b => ({
-      id: b.id,
-      start_time: b.start_time,
-      end_time: b.end_time,
-      status: b.status,
-      notes: b.notes || null,
-      price_cents: DEMO_SERVICES.find(s => s.id === b.service_id)?.price_cents || 0,
-      customer: {
-        id: 'cust-1',
-        name: b.customer_name,
-        phone: b.customer_phone,
-        email: b.customer_email,
-      },
-      service: {
-        id: b.service_id,
-        name: DEMO_SERVICES.find(s => s.id === b.service_id)?.name || 'Unknown',
-        duration_min: DEMO_SERVICES.find(s => s.id === b.service_id)?.duration_minutes || 30,
-      },
-      stylist: {
-        id: b.stylist_id,
-        name: DEMO_STYLISTS.find(s => s.id === b.stylist_id)?.name || 'Unknown',
-      },
-    }));
-
-    return NextResponse.json(enriched);
+    const appointments = await getAppointments(DEMO_SALON_ID, { startDate: startDate || undefined, endDate: endDate || undefined });
+    return NextResponse.json(appointments);
   } catch (err) {
+    console.error('Appointments GET error:', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
 export async function POST(request: Request) {
   try {
-    if (!verifyDemoSession(request)) {
+    if (!verifySession(request)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const body = await request.json();
-    const { serviceId, stylistId, startTime, customerName, customerPhone } = body;
+    const { customer_id, service_id, stylist_id, start_time, end_time, customer_name, customer_phone, customer_email, notes, status } = body;
 
-    const service = DEMO_SERVICES.find(s => s.id === serviceId);
-    if (!service) {
-      return NextResponse.json({ error: 'Service not found' }, { status: 404 });
+    if (!service_id || !start_time) {
+      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    const booking = {
-      id: `booking-${Date.now()}`,
-      start_time: startTime,
-      end_time: new Date(new Date(startTime).getTime() + service.duration_minutes * 60000).toISOString(),
-      status: 'pending',
-      stylist_id: stylistId || DEMO_STYLISTS[0].id,
-      service_id: serviceId,
-      customer_name: customerName,
-      customer_phone: customerPhone,
-      customer_email: '',
-      notes: '',
-      created_at: new Date().toISOString(),
-    };
+    const selectedCustomer = customer_id ? await fetchCustomerById(customer_id) : null;
 
-    DEMO_BOOKINGS.push(booking);
+    const result = await createAppointment({
+      salon_id: DEMO_SALON_ID,
+      serviceId: service_id,
+      stylistId: stylist_id || null,
+      startTime: start_time,
+      endTime: end_time,
+      customerName: customer_name || selectedCustomer?.name,
+      customerPhone: customer_phone || selectedCustomer?.phone,
+      customerEmail: customer_email || selectedCustomer?.email,
+      notes,
+    });
 
-    return NextResponse.json({
-      id: booking.id,
-      start_time: booking.start_time,
-      end_time: booking.end_time,
-      status: booking.status,
+    if (!result) {
+      return NextResponse.json({ error: 'Failed to create appointment' }, { status: 500 });
+    }
+
+    if (status && status !== 'pending') {
+      await updateAppointment(result.id, { status });
+    }
+
+    const fullAppointment = getAppointmentById(result.id);
+    return NextResponse.json(fullAppointment || {
+      id: result.id,
+      start_time: result.start_time,
+      end_time: result.end_time,
+      status: status || 'pending',
     }, { status: 201 });
   } catch (err) {
+    console.error('Appointments POST error:', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

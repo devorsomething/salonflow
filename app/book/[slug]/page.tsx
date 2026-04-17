@@ -45,7 +45,29 @@ interface BookingFormData {
   preferred_time: 'morning' | 'afternoon' | 'evening' | '';
 }
 
-type Step = 'service' | 'stylist' | 'date' | 'time' | 'info' | 'confirm';
+interface AnamneseFormData {
+  allergies: string;
+  medications: string;
+  pregnancy: 'yes' | 'no' | '';
+  hair_conditions: string;
+}
+
+interface CouponState {
+  code: string;
+  valid: boolean;
+  discount_cents: number;
+  discount_percent: number;
+  error: string;
+}
+
+interface DepositState {
+  cardNumber: string;
+  expiry: string;
+  cvv: string;
+  paymentMethod: 'card' | 'onsite';
+}
+
+type Step = 'service' | 'stylist' | 'date' | 'time' | 'coupon' | 'info' | 'anamnese' | 'deposit' | 'confirm';
 type AnimationDirection = 'left' | 'right' | 'none';
 
 // Default add-ons
@@ -103,13 +125,29 @@ async function createBooking(data: {
   addons?: string[];
 }): Promise<{ token: string } | null> {
   try {
+    // Format for /api/bookings (POST)
+    // data.time is ISO timestamp from slot selection, so extract just the HH:mm:ss part
+    const timePart = data.time.includes('T') ? data.time.split('T')[1] : data.time;
+    const startTime = `${data.date}T${timePart}`;
     const res = await fetch('/api/bookings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
+      credentials: 'include',
+      body: JSON.stringify({
+        salonSlug: data.salon_id,
+        serviceId: data.service_id,
+        stylistId: data.stylist_id,
+        startTime,
+        customerName: data.customer_name,
+        customerPhone: data.phone,
+        customerEmail: data.email,
+        notes: data.notes,
+      }),
     });
     if (!res.ok) return null;
-    return res.json();
+    const json = await res.json();
+    // Return token for verify-booking redirect
+    return { token: json.verifyToken || json.bookingId || '' };
   } catch {
     return null;
   }
@@ -117,7 +155,10 @@ async function createBooking(data: {
 
 // Utility functions
 function formatDate(date: Date): string {
-  return date.toISOString().split('T')[0];
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 function formatDisplayDate(date: Date): string {
@@ -284,38 +325,94 @@ function Calendar({
   );
 }
 
-// Step Indicator Component
+// Step Icons
+const STEP_ICONS: Record<Step, React.ReactNode> = {
+  service: (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+    </svg>
+  ),
+  stylist: (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+    </svg>
+  ),
+  date: (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+    </svg>
+  ),
+  time: (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  ),
+  coupon: (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+    </svg>
+  ),
+  info: (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+    </svg>
+  ),
+  anamnese: (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+    </svg>
+  ),
+  deposit: (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+    </svg>
+  ),
+  confirm: (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  ),
+};
+
+// Step Indicator Component with icons
 function StepIndicator({ currentStep, steps }: { currentStep: Step; steps: { key: Step; label: string }[] }) {
   const currentIndex = steps.findIndex((s) => s.key === currentStep);
 
   return (
-    <div className="flex items-center justify-center gap-2 mb-8">
+    <div className="flex items-center justify-center gap-1 mb-8 overflow-x-auto py-2">
       {steps.map((step, index) => (
         <div key={step.key} className="flex items-center">
-          <div
-            className={`
-              w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-all duration-250
-              ${
-                index < currentIndex
-                  ? 'bg-sage-600 text-white'
-                  : index === currentIndex
-                  ? 'bg-sage-600 text-white shadow-md'
-                  : 'bg-sage-100 text-sage-500'
-              }
-            `}
-          >
-            {index < currentIndex ? (
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-            ) : (
-              index + 1
-            )}
+          <div className="flex flex-col items-center">
+            <div
+              className={`
+                w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium transition-all duration-250
+                ${
+                  index < currentIndex
+                    ? 'bg-sage-600 text-white'
+                    : index === currentIndex
+                    ? 'bg-sage-600 text-white shadow-md ring-4 ring-sage-100'
+                    : 'bg-sage-100 text-sage-500'
+                }
+              `}
+            >
+              {index < currentIndex ? (
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              ) : (
+                STEP_ICONS[step.key]
+              )}
+            </div>
+            <span className={`text-xs mt-1.5 font-medium hidden sm:block ${
+              index === currentIndex ? 'text-sage-700' : 'text-sage-500'
+            }`}>
+              {step.label}
+            </span>
           </div>
           {index < steps.length - 1 && (
             <div
-              className={`w-8 h-0.5 mx-1 ${
-                index < currentIndex ? 'bg-sage-600' : 'bg-sage-100'
+              className={`w-6 sm:w-10 h-0.5 mx-1 ${
+                index < currentIndex ? 'bg-sage-600' : 'bg-sage-200'
               }`}
             />
           )}
@@ -459,6 +556,37 @@ export default function BookingPage() {
   const [formErrors, setFormErrors] = useState<Partial<BookingFormData>>({});
   const [submitting, setSubmitting] = useState(false);
 
+  // Coupon state
+  const [couponState, setCouponState] = useState<CouponState>({
+    code: '',
+    valid: false,
+    discount_cents: 0,
+    discount_percent: 0,
+    error: '',
+  });
+  const [validatingCoupon, setValidatingCoupon] = useState(false);
+
+  // Anamnese state (for coloring/chemical services)
+  const [anamneseData, setAnamneseData] = useState<AnamneseFormData>({
+    allergies: '',
+    medications: '',
+    pregnancy: '',
+    hair_conditions: '',
+  });
+
+  // Deposit payment state
+  const [depositState, setDepositState] = useState<DepositState>({
+    cardNumber: '',
+    expiry: '',
+    cvv: '',
+    paymentMethod: 'card',
+  });
+  const [processingPayment, setProcessingPayment] = useState(false);
+  const [depositError, setDepositError] = useState('');
+
+  // Service categories that require anamnese
+  const ANAMNESE_CATEGORIES = ['color', 'chemical', 'bleach', 'perm', 'straightening'];
+
   // Animate step transition
   const animateToStep = useCallback((newStep: Step, direction: AnimationDirection = 'right') => {
     setIsAnimating(true);
@@ -493,13 +621,13 @@ export default function BookingPage() {
   // Load time slots when date changes
   useEffect(() => {
     async function loadSlots() {
-      if (!salon || !selectedService || !selectedStylist || !selectedDate) return;
+      if (!salon || !selectedService || !selectedDate) return;
 
       setLoadingSlots(true);
       const slots = await fetchSlots(
         salon.id,
         selectedService.id,
-        selectedStylist.id,
+        selectedStylist?.id || '',
         formatDate(selectedDate)
       );
       setTimeSlots(slots);
@@ -513,14 +641,35 @@ export default function BookingPage() {
     { key: 'stylist' as Step, label: 'Stylist' },
     { key: 'date' as Step, label: 'Datum' },
     { key: 'time' as Step, label: 'Zeit' },
+    { key: 'coupon' as Step, label: 'Rabatt' },
     { key: 'info' as Step, label: 'Info' },
+    { key: 'anamnese' as Step, label: 'Fragebogen' },
+    { key: 'deposit' as Step, label: 'Anzahlung' },
     { key: 'confirm' as Step, label: 'Bestätigung' },
   ];
 
   const goToStep = (step: Step) => setCurrentStep(step);
 
+  // Get the effective step order based on service type
+  const getStepOrder = (): Step[] => {
+    const baseSteps: Step[] = ['service', 'stylist', 'date', 'time', 'coupon', 'info'];
+    if (serviceRequiresAnamnese()) {
+      baseSteps.push('anamnese');
+    }
+    baseSteps.push('deposit', 'confirm');
+    return baseSteps;
+  };
+
+  // Check if selected service requires anamnese
+  const serviceRequiresAnamnese = (): boolean => {
+    if (!selectedService) return false;
+    const colorServiceNames = ['coloring', 'col', 'färb', 'blond', 'bleach', 'perm', 'chem'];
+    const name = selectedService.name.toLowerCase();
+    return ANAMNESE_CATEGORIES.some(cat => name.includes(cat)) || colorServiceNames.some(c => name.includes(c));
+  };
+
   const nextStep = useCallback(() => {
-    const stepOrder: Step[] = ['service', 'stylist', 'date', 'time', 'info', 'confirm'];
+    const stepOrder = getStepOrder();
     const currentIndex = stepOrder.indexOf(currentStep);
     if (currentIndex < stepOrder.length - 1) {
       animateToStep(stepOrder[currentIndex + 1], 'right');
@@ -528,12 +677,18 @@ export default function BookingPage() {
   }, [currentStep, animateToStep]);
 
   const prevStep = useCallback(() => {
-    const stepOrder: Step[] = ['service', 'stylist', 'date', 'time', 'info', 'confirm'];
+    const stepOrder = getStepOrder();
     const currentIndex = stepOrder.indexOf(currentStep);
     if (currentIndex > 0) {
       animateToStep(stepOrder[currentIndex - 1], 'left');
     }
   }, [currentStep, animateToStep]);
+
+  // Get visible steps for indicator
+  const visibleSteps = steps.filter(step => {
+    if (step.key === 'anamnese') return serviceRequiresAnamnese();
+    return true;
+  });
 
   const canProceed = (): boolean => {
     switch (currentStep) {
@@ -545,8 +700,14 @@ export default function BookingPage() {
         return !!selectedDate;
       case 'time':
         return !!selectedTime;
+      case 'coupon':
+        return true; // Coupon is optional
       case 'info':
         return !!(formData.customer_name && formData.phone);
+      case 'anamnese':
+        return true; // Anamnese is optional/non-blocking
+      case 'deposit':
+        return true; // Deposit is optional
       case 'confirm':
         return true;
       default:
@@ -554,21 +715,49 @@ export default function BookingPage() {
     }
   };
 
+  // Calculate total price with addons and discount
+  const calculateTotal = (): number => {
+    const servicePrice = selectedService?.price || 0;
+    const addonsPrice = selectedAddons.reduce((sum, a) => sum + a.price, 0);
+    const subtotal = servicePrice + addonsPrice;
+    const discount = couponState.valid ? couponState.discount_cents : 0;
+    return Math.max(0, subtotal - discount);
+  };
+
+  // Calculate deposit amount (min €5 or 20% of total, whichever is higher)
+  const calculateDeposit = (): number => {
+    const total = calculateTotal();
+    const minDeposit = 500; // €5 in cents
+    const percentDeposit = Math.round(total * 0.2);
+    return Math.max(minDeposit, percentDeposit);
+  };
+
   const validateForm = (): boolean => {
     const errors: Partial<BookingFormData> = {};
 
     if (!formData.customer_name.trim()) {
       errors.customer_name = 'Name ist erforderlich';
+    } else if (formData.customer_name.trim().length < 2) {
+      errors.customer_name = 'Name muss mindestens 2 Zeichen haben';
     }
 
     if (!formData.phone.trim()) {
       errors.phone = 'Telefonnummer ist erforderlich';
-    } else if (!/^[\d\s\+\-\(\)]{7,}$/.test(formData.phone)) {
-      errors.phone = 'Ungültige Telefonnummer';
+    } else {
+      // Austrian phone: +43 or 06x format, allowing spaces/dashes
+      const cleanedPhone = formData.phone.replace(/[\s\-\(\)]/g, '');
+      const austriaPhoneRegex = /^(\+43|06\d)\d{6,12}$/;
+      if (!austriaPhoneRegex.test(cleanedPhone)) {
+        errors.phone = 'Ungültige Telefonnummer (z.B. +43 123 456789 oder 0661 234567)';
+      }
     }
 
-    if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      errors.email = 'Ungültige E-Mail-Adresse';
+    if (formData.email && formData.email.trim() !== '') {
+      // Stronger email validation
+      const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+      if (!emailRegex.test(formData.email)) {
+        errors.email = 'Ungültige E-Mail-Adresse';
+      }
     }
 
     setFormErrors(errors);
@@ -580,6 +769,111 @@ export default function BookingPage() {
       return;
     }
     nextStep();
+  };
+
+  // Handle coupon validation
+  const handleCouponSubmit = async () => {
+    if (!couponState.code.trim()) {
+      setCouponState(prev => ({ ...prev, error: 'Bitte geben Sie einen Code ein' }));
+      return;
+    }
+
+    setValidatingCoupon(true);
+    setCouponState(prev => ({ ...prev, error: '' }));
+
+    try {
+      const orderCents = (selectedService?.price || 0) + selectedAddons.reduce((s, a) => s + a.price, 0);
+      const res = await fetch('/api/coupons/validate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${typeof window !== 'undefined' ? localStorage.getItem('salonflow_token') || '' : ''}`
+        },
+        body: JSON.stringify({
+          code: couponState.code,
+          order_cents: orderCents
+        }),
+      });
+
+      const data = await res.json();
+
+      if (data.valid) {
+        const discountPercent = data.coupon?.discount_type === 'percent' ? data.coupon.discount_value : 0;
+        const discountCents = data.discount_cents || 0;
+        setCouponState(prev => ({
+          ...prev,
+          valid: true,
+          discount_cents: discountCents,
+          discount_percent: discountPercent,
+          error: ''
+        }));
+      } else {
+        setCouponState(prev => ({
+          ...prev,
+          valid: false,
+          discount_cents: 0,
+          discount_percent: 0,
+          error: data.error || 'Code ungültig oder abgelaufen'
+        }));
+      }
+    } catch {
+      setCouponState(prev => ({
+        ...prev,
+        valid: false,
+        discount_cents: 0,
+        discount_percent: 0,
+        error: 'Validierung fehlgeschlagen'
+      }));
+    }
+    setValidatingCoupon(false);
+  };
+
+  // Handle deposit payment
+  const handleDepositPayment = async () => {
+    if (depositState.paymentMethod === 'card') {
+      // Validate card fields
+      if (!depositState.cardNumber || depositState.cardNumber.replace(/\s/g, '').length < 16) {
+        setDepositError('Bitte geben Sie eine gültige Kartennummer ein');
+        return;
+      }
+      if (!depositState.expiry || !depositState.expiry.includes('/')) {
+        setDepositError('Bitte geben Sie ein gültiges Ablaufdatum ein (MM/JJ)');
+        return;
+      }
+      if (!depositState.cvv || depositState.cvv.length < 3) {
+        setDepositError('Bitte geben Sie einen gültigen CVV ein');
+        return;
+      }
+
+      setProcessingPayment(true);
+      setDepositError('');
+
+      try {
+        const depositAmount = calculateDeposit();
+        const res = await fetch('/api/payments', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('salonflow_token') || ''}`
+          },
+          body: JSON.stringify({
+            amount_cents: depositAmount,
+            method: 'card',
+            status: 'completed',
+            notes: `Deposit for booking - ${couponState.code ? `Coupon: ${couponState.code}` : 'No coupon'}`
+          }),
+        });
+
+        if (!res.ok) throw new Error('Payment failed');
+        nextStep();
+      } catch {
+        setDepositError('Zahlung fehlgeschlagen. Bitte versuchen Sie es erneut.');
+      }
+      setProcessingPayment(false);
+    } else {
+      // Skip deposit, pay onsite
+      nextStep();
+    }
   };
 
   const handleSubmit = async () => {
@@ -681,22 +975,50 @@ export default function BookingPage() {
         </div>
       </header>
 
-      {/* Main Content - Different layout for confirm step */}
-      <main className={`max-w-6xl mx-auto px-4 py-8 ${currentStep === 'confirm' ? 'lg:flex lg:gap-8' : ''}`}>
-        <div className={currentStep === 'confirm' ? 'flex-1' : ''}>
-          <StepIndicator currentStep={currentStep} steps={steps} />
-
-          {/* Error Banner */}
-          {error && (
-            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
-              {error}
+      {/* Trust Signals Bar */}
+      <div className="bg-sage-50 border-b border-sage-100">
+        <div className="max-w-6xl mx-auto px-4 py-3">
+          <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-8 text-sm text-sage-600">
+            <div className="flex items-center gap-1.5">
+              <svg className="w-4 h-4 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+              </svg>
+              <span>SSL-verschlüsselt</span>
             </div>
-          )}
+            <div className="flex items-center gap-1.5">
+              <svg className="w-4 h-4 text-amber-500" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+              </svg>
+              <span>4.8 (127 Bewertungen)</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <svg className="w-4 h-4 text-sage-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+              </svg>
+              <span>Kostenlose Stornierung</span>
+            </div>
+          </div>
+        </div>
+      </div>
 
-          {/* Step Content with Animation */}
-          <div 
-            className={`bg-white rounded-2xl p-6 shadow-sm border border-sage-100 transition-all duration-200 ease-out ${getAnimationClass()}`}
-          >
+      {/* Main Content */}
+      <main className="max-w-6xl mx-auto px-4 py-8">
+        {/* Desktop: Two column layout with sticky sidebar */}
+        <div className="hidden md:grid md:grid-cols-3 lg:grid-cols-4 gap-8">
+          <div className="md:col-span-2 lg:col-span-3">
+            <StepIndicator currentStep={currentStep} steps={visibleSteps} />
+
+            {/* Error Banner */}
+            {error && (
+              <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
+                {error}
+              </div>
+            )}
+
+            {/* Step Content with Animation */}
+            <div 
+              className={`bg-white rounded-2xl p-6 shadow-sm border border-sage-100 transition-all duration-200 ease-out ${getAnimationClass()}`}
+            >
             {/* Step 1: Select Service */}
             {currentStep === 'service' && (
               <div>
@@ -873,78 +1195,270 @@ export default function BookingPage() {
             {/* Step 4: Pick Time */}
             {currentStep === 'time' && (
               <div>
-                <h2 className="text-lg font-semibold text-sage-900 mb-4">
+                <h2 className="text-lg font-semibold text-sage-900 mb-1">
                   Wählen Sie Ihre Zeit
                 </h2>
                 {selectedDate && (
-                  <p className="text-sm text-sage-600 mb-4">
+                  <p className="text-sm text-sage-500 mb-6">
                     {formatDisplayDate(selectedDate)}
                   </p>
                 )}
-                
-                {/* Preferred Time Dropdown */}
-                <div className="mb-6">
-                  <label
-                    htmlFor="preferred_time"
-                    className="block text-sm font-medium text-sage-700 mb-2"
-                  >
-                    Bevorzugte Tageszeit (optional)
-                  </label>
-                  <select
-                    id="preferred_time"
-                    value={formData.preferred_time}
-                    onChange={(e) =>
-                      setFormData({ ...formData, preferred_time: e.target.value as 'morning' | 'afternoon' | 'evening' | '' })
-                    }
-                    className="w-full px-4 py-3 rounded-xl border-2 border-sage-200 bg-white text-sage-900 focus:outline-none focus:border-sage-500 transition-colors"
-                  >
-                    <option value="">Keine Präferenz</option>
-                    <option value="morning">Vormittag (8-12 Uhr)</option>
-                    <option value="afternoon">Nachmittag (12-17 Uhr)</option>
-                    <option value="evening">Abend (17-20 Uhr)</option>
-                  </select>
+
+                {/* Morning / Afternoon / Evening quick filter pills */}
+                <div className="flex gap-2 mb-6">
+                  {(['morning', 'afternoon', 'evening'] as const).map((period) => {
+                    const icons = {
+                      morning: (
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                        </svg>
+                      ),
+                      afternoon: (
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                        </svg>
+                      ),
+                      evening: (
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                        </svg>
+                      ),
+                    };
+                    const labels = { morning: 'Vormittag', afternoon: 'Nachmittag', evening: 'Abend' };
+                    const times = { morning: [8, 12], afternoon: [12, 17], evening: [17, 20] };
+                    const filtered = timeSlots.filter((slot) => {
+                      const h = parseInt(slot.time.split(':')[0]);
+                      return h >= times[period][0] && h < times[period][1];
+                    });
+                    const available = filtered.filter((s) => s.available).length;
+                    const isActive = formData.preferred_time === period;
+                    return (
+                      <button
+                        key={period}
+                        type="button"
+                        onClick={() => setFormData({ ...formData, preferred_time: isActive ? '' : period })}
+                        className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl border-2 text-sm font-medium transition-all duration-150 ${
+                          isActive
+                            ? 'border-sage-600 bg-sage-50 text-sage-700'
+                            : available > 0
+                            ? 'border-sage-200 bg-white text-sage-600 hover:border-sage-300'
+                            : 'border-sage-100 bg-white text-sage-300 cursor-not-allowed'
+                        }`}
+                      >
+                        {icons[period]}
+                        <span>{labels[period]}</span>
+                        {available > 0 && (
+                          <span className={`text-xs px-1.5 py-0.5 rounded-full ${isActive ? 'bg-sage-200 text-sage-800' : 'bg-sage-100 text-sage-600'}`}>
+                            {available}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
 
                 {loadingSlots ? (
                   <div className="grid grid-cols-3 gap-2">
                     {[...Array(9)].map((_, i) => (
-                      <div
-                        key={i}
-                        className="h-12 bg-sage-100 rounded-xl animate-pulse"
-                      />
+                      <div key={i} className="h-14 bg-sage-100 rounded-xl animate-pulse" />
                     ))}
                   </div>
                 ) : timeSlots.length === 0 ? (
-                  <div className="text-center py-8">
-                    <p className="text-sage-500 mb-2">Keine Termine verfügbar</p>
-                    <p className="text-sm text-sage-400">
-                      Bitte wählen Sie ein anderes Datum
-                    </p>
+                  <div className="text-center py-12">
+                    <div className="w-16 h-16 bg-sage-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <svg className="w-8 h-8 text-sage-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    <p className="text-sage-500 font-medium mb-1">Keine Termine verfügbar</p>
+                    <p className="text-sm text-sage-400">Bitte wählen Sie ein anderes Datum</p>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-3 gap-2">
-                    {timeSlots.map((slot) => (
+                  <>
+                    {/* Time period sections */}
+                    {(['morning', 'afternoon', 'evening'] as const).map((period) => {
+                      const filtered = timeSlots.filter((slot) => {
+                        const h = parseInt(slot.time.split(':')[0]);
+                        const times = { morning: [8, 12], afternoon: [12, 17], evening: [17, 21] };
+                        return h >= times[period][0] && h < times[period][1];
+                      });
+                      if (filtered.length === 0) return null;
+                      const labels = { morning: '☀️ Vormittag', afternoon: '🌤️ Nachmittag', evening: '🌙 Abend' };
+                      return (
+                        <div key={period} className="mb-5">
+                          <p className={`text-xs font-semibold uppercase tracking-wider mb-2 ${formData.preferred_time && formData.preferred_time !== period ? 'text-sage-300' : 'text-sage-500'}`}>
+                            {labels[period]}
+                          </p>
+                          <div className="grid grid-cols-4 gap-2">
+                            {filtered.map((slot) => {
+                              const h = parseInt(slot.time.split(':')[0]);
+                              const m = slot.time.split(':')[1];
+                              const isActive = selectedTime === slot.time;
+                              const isAvailable = slot.available;
+                              const isPreferredTime = !formData.preferred_time || formData.preferred_time === period;
+                              return (
+                                <button
+                                  key={slot.time}
+                                  type="button"
+                                  disabled={!isAvailable}
+                                  onClick={() => setSelectedTime(slot.time)}
+                                  className={`
+                                    relative py-3 rounded-xl font-medium text-sm transition-all duration-150
+                                    ${isActive
+                                      ? 'bg-sage-600 text-white shadow-lg shadow-sage-200 scale-105'
+                                      : isAvailable && isPreferredTime
+                                      ? 'bg-white border-2 border-sage-200 text-sage-700 hover:border-sage-400 hover:shadow-sm'
+                                      : isAvailable
+                                      ? 'bg-white border-2 border-sage-100 text-sage-400'
+                                      : 'bg-sage-50 text-sage-300 cursor-not-allowed'
+                                    }
+                                  `}
+                                >
+                                  <span className={isActive ? '' : isAvailable ? '' : 'line-through'}>
+                                    {String(h).padStart(2, '0')}:{m}
+                                  </span>
+                                  {!isAvailable && (
+                                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-400 rounded-full flex items-center justify-center">
+                                      <span className="text-white text-xs">×</span>
+                                    </span>
+                                  )}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {timeSlots.length > 0 && (
+                      <p className="text-xs text-center text-sage-400 mt-4">
+                        ✕ = bereits gebucht · {timeSlots.filter((s) => !s.available).length} von {timeSlots.length} belegt
+                      </p>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* Step 4.5: Coupon Code */}
+            {currentStep === 'coupon' && (
+              <div>
+                <h2 className="text-lg font-semibold text-sage-900 mb-2">
+                  Rabatt-Code einlösen
+                </h2>
+                <p className="text-sm text-sage-500 mb-6">
+                  Haben Sie einen Gutschein? Geben Sie hier Ihren Code ein.
+                </p>
+                
+                <div className="space-y-4">
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={couponState.code}
+                      onChange={(e) => setCouponState(prev => ({ 
+                        ...prev, 
+                        code: e.target.value.toUpperCase(),
+                        valid: false,
+                        error: ''
+                      }))}
+                      placeholder="z.B. WILLKOMMEN10"
+                      disabled={couponState.valid}
+                      className={`
+                        flex-1 px-4 py-3 rounded-xl border-2 bg-white text-sage-900 placeholder-sage-400
+                        focus:outline-none focus:border-sage-500 transition-colors uppercase
+                        ${couponState.valid ? 'border-green-400 bg-green-50' : 'border-sage-200'}
+                        ${couponState.valid ? '' : ''}
+                      `}
+                    />
+                    {!couponState.valid && (
                       <button
-                        key={slot.time}
                         type="button"
-                        disabled={!slot.available}
-                        onClick={() => setSelectedTime(slot.time)}
+                        onClick={handleCouponSubmit}
+                        disabled={validatingCoupon || !couponState.code.trim()}
                         className={`
-                          py-3 rounded-xl font-medium text-sm transition-all duration-150
-                          ${
-                            selectedTime === slot.time
-                              ? 'bg-sage-600 text-white shadow-md'
-                              : slot.available
-                              ? 'bg-sage-50 text-sage-700 hover:bg-sage-100'
-                              : 'bg-sage-50 text-sage-300 cursor-not-allowed line-through'
+                          px-6 py-3 rounded-xl font-medium transition-all duration-150
+                          ${validatingCoupon || !couponState.code.trim()
+                            ? 'bg-sage-200 text-sage-400 cursor-not-allowed'
+                            : 'bg-sage-600 text-white hover:bg-sage-700 shadow-md'
                           }
                         `}
                       >
-                        {formatTime(slot.time)}
+                        {validatingCoupon ? 'Prüfe...' : 'Einlösen'}
                       </button>
-                    ))}
+                    )}
+                    {couponState.valid && (
+                      <button
+                        type="button"
+                        onClick={() => setCouponState(prev => ({ 
+                          ...prev, 
+                          code: '',
+                          valid: false,
+                          discount_cents: 0,
+                          discount_percent: 0,
+                          error: ''
+                        }))}
+                        className="px-4 py-3 rounded-xl border-2 border-sage-200 text-sage-600 hover:bg-sage-50 transition-colors"
+                      >
+                        ✕
+                      </button>
+                    )}
                   </div>
-                )}
+
+                  {couponState.error && (
+                    <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm flex items-center gap-2">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      {couponState.error}
+                    </div>
+                  )}
+
+                  {couponState.valid && (
+                    <div className="p-3 bg-green-50 border border-green-200 rounded-xl text-green-700 text-sm flex items-center gap-2">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      Code gültig! -{couponState.discount_percent > 0 ? `${couponState.discount_percent}%` : `€${(couponState.discount_cents / 100).toFixed(2)}`} Rabatt
+                    </div>
+                  )}
+
+                  <div className="bg-sage-50 rounded-xl p-4">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sage-600">Zwischensumme</span>
+                      <span className="font-medium text-sage-900">
+                        €{((selectedService?.price || 0) + selectedAddons.reduce((s, a) => s + a.price, 0)).toFixed(2)}
+                      </span>
+                    </div>
+                    {couponState.valid && (
+                      <div className="flex justify-between items-center mt-2 text-green-600">
+                        <span>Rabatt ({couponState.code})</span>
+                        <span className="font-medium">-€{(couponState.discount_cents / 100).toFixed(2)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between items-center mt-3 pt-3 border-t border-sage-200">
+                      <span className="text-sage-700 font-semibold">Gesamt</span>
+                      <span className="text-xl font-bold text-sage-900">
+                        €{(calculateTotal() / 100).toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex gap-3 mt-6">
+                  <button
+                    type="button"
+                    onClick={prevStep}
+                    className="flex-1 py-3 px-4 rounded-xl border-2 border-sage-200 text-sage-700 font-medium hover:bg-sage-50 transition-colors"
+                  >
+                    Zurück
+                  </button>
+                  <button
+                    type="button"
+                    onClick={nextStep}
+                    className="flex-1 py-3 px-4 rounded-xl bg-sage-600 text-white font-medium hover:bg-sage-700 shadow-md transition-colors"
+                  >
+                    Weiter
+                  </button>
+                </div>
               </div>
             )}
 
@@ -1057,13 +1571,285 @@ export default function BookingPage() {
               </div>
             )}
 
-            {/* Step 6: Confirm */}
+            {/* Step 5.5: Anamnese Form - only for coloring/chemical services */}
+            {currentStep === 'anamnese' && (
+              <div>
+                <h2 className="text-lg font-semibold text-sage-900 mb-2">
+                  Gesundheitsfragebogen
+                </h2>
+                <p className="text-sm text-sage-500 mb-6">
+                  Bitte beantworten Sie diese Fragen für Ihre Sicherheit bei chemischen Behandlungen.
+                </p>
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-sage-700 mb-2">
+                      Haben Sie Allergien?
+                    </label>
+                    <input
+                      type="text"
+                      value={anamneseData.allergies}
+                      onChange={(e) => setAnamneseData(prev => ({ ...prev, allergies: e.target.value }))}
+                      placeholder="z.B. Nickel, Latex, bestimmte Inhaltsstoffe..."
+                      className="w-full px-4 py-3 rounded-xl border-2 border-sage-200 bg-white text-sage-900 placeholder-sage-400 focus:outline-none focus:border-sage-500 transition-colors"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-sage-700 mb-2">
+                      Nehmen Sie Medikamente?
+                    </label>
+                    <input
+                      type="text"
+                      value={anamneseData.medications}
+                      onChange={(e) => setAnamneseData(prev => ({ ...prev, medications: e.target.value }))}
+                      placeholder="z.B. Blutverdünner, Antibiotika..."
+                      className="w-full px-4 py-3 rounded-xl border-2 border-sage-200 bg-white text-sage-900 placeholder-sage-400 focus:outline-none focus:border-sage-500 transition-colors"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-sage-700 mb-3">
+                      Sind Sie schwanger?
+                    </label>
+                    <div className="flex gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setAnamneseData(prev => ({ ...prev, pregnancy: 'yes' }))}
+                        className={`flex-1 py-3 px-4 rounded-xl border-2 font-medium transition-all ${
+                          anamneseData.pregnancy === 'yes'
+                            ? 'border-sage-600 bg-sage-50 text-sage-700'
+                            : 'border-sage-200 text-sage-600 hover:border-sage-300'
+                        }`}
+                      >
+                        Ja
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAnamneseData(prev => ({ ...prev, pregnancy: 'no' }))}
+                        className={`flex-1 py-3 px-4 rounded-xl border-2 font-medium transition-all ${
+                          anamneseData.pregnancy === 'no'
+                            ? 'border-sage-600 bg-sage-50 text-sage-700'
+                            : 'border-sage-200 text-sage-600 hover:border-sage-300'
+                        }`}
+                      >
+                        Nein
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-sage-700 mb-2">
+                      Haben Sie Haarerkrankungen?
+                    </label>
+                    <input
+                      type="text"
+                      value={anamneseData.hair_conditions}
+                      onChange={(e) => setAnamneseData(prev => ({ ...prev, hair_conditions: e.target.value }))}
+                      placeholder="z.B. Schuppenflechte, Ekzeme, empfindliche Kopfhaut..."
+                      className="w-full px-4 py-3 rounded-xl border-2 border-sage-200 bg-white text-sage-900 placeholder-sage-400 focus:outline-none focus:border-sage-500 transition-colors"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-3 mt-6">
+                  <button
+                    type="button"
+                    onClick={prevStep}
+                    className="flex-1 py-3 px-4 rounded-xl border-2 border-sage-200 text-sage-700 font-medium hover:bg-sage-50 transition-colors"
+                  >
+                    Zurück
+                  </button>
+                  <button
+                    type="button"
+                    onClick={nextStep}
+                    className="flex-1 py-3 px-4 rounded-xl bg-sage-600 text-white font-medium hover:bg-sage-700 shadow-md transition-colors"
+                  >
+                    Weiter
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Step 6: Deposit Payment */}
+            {currentStep === 'deposit' && (
+              <div>
+                <h2 className="text-lg font-semibold text-sage-900 mb-2">
+                  Anzahlung
+                </h2>
+                <p className="text-sm text-sage-500 mb-6">
+                  Sichern Sie Ihren Termin mit einer Anzahlung.
+                </p>
+
+                <div className="bg-sage-50 rounded-xl p-4 mb-6">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-sage-600">Gesamtbetrag</span>
+                    <span className="font-semibold text-sage-900">€{(calculateTotal() / 100).toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-lg">
+                    <span className="text-sage-700 font-medium">Anzahlung fällig</span>
+                    <span className="text-xl font-bold text-sage-600">€{(calculateDeposit() / 100).toFixed(2)}</span>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="border-2 border-sage-200 rounded-xl overflow-hidden">
+                    <div className="flex">
+                      <button
+                        type="button"
+                        onClick={() => setDepositState(prev => ({ ...prev, paymentMethod: 'card' }))}
+                        className={`flex-1 py-3 px-4 font-medium transition-colors ${
+                          depositState.paymentMethod === 'card'
+                            ? 'bg-sage-600 text-white'
+                            : 'bg-white text-sage-600 hover:bg-sage-50'
+                        }`}
+                      >
+                        <span className="flex items-center justify-center gap-2">
+                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                          </svg>
+                          Kartenzahlung
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDepositState(prev => ({ ...prev, paymentMethod: 'onsite' }))}
+                        className={`flex-1 py-3 px-4 font-medium transition-colors ${
+                          depositState.paymentMethod === 'onsite'
+                            ? 'bg-sage-600 text-white'
+                            : 'bg-white text-sage-600 hover:bg-sage-50'
+                        }`}
+                      >
+                        <span className="flex items-center justify-center gap-2">
+                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                          </svg>
+                          Vor-Ort-Zahlung
+                        </span>
+                      </button>
+                    </div>
+
+                    {depositState.paymentMethod === 'card' && (
+                      <div className="p-4 bg-white space-y-4">
+                        <div>
+                          <label className="block text-sm font-medium text-sage-700 mb-1">
+                            Kartennummer
+                          </label>
+                          <input
+                            type="text"
+                            value={depositState.cardNumber}
+                            onChange={(e) => {
+                              const val = e.target.value.replace(/\D/g, '').slice(0, 16);
+                              const formatted = val.replace(/(\d{4})/g, '$1 ').trim();
+                              setDepositState(prev => ({ ...prev, cardNumber: formatted }));
+                            }}
+                            placeholder="1234 5678 9012 3456"
+                            maxLength={19}
+                            className="w-full px-4 py-3 rounded-xl border-2 border-sage-200 bg-white text-sage-900 placeholder-sage-400 focus:outline-none focus:border-sage-500 transition-colors"
+                          />
+                        </div>
+                        <div className="flex gap-4">
+                          <div className="flex-1">
+                            <label className="block text-sm font-medium text-sage-700 mb-1">
+                              Ablaufdatum
+                            </label>
+                            <input
+                              type="text"
+                              value={depositState.expiry}
+                              onChange={(e) => {
+                                let val = e.target.value.replace(/\D/g, '').slice(0, 4);
+                                if (val.length >= 2) val = val.slice(0, 2) + '/' + val.slice(2);
+                                setDepositState(prev => ({ ...prev, expiry: val }));
+                              }}
+                              placeholder="MM/JJ"
+                              maxLength={5}
+                              className="w-full px-4 py-3 rounded-xl border-2 border-sage-200 bg-white text-sage-900 placeholder-sage-400 focus:outline-none focus:border-sage-500 transition-colors"
+                            />
+                          </div>
+                          <div className="flex-1">
+                            <label className="block text-sm font-medium text-sage-700 mb-1">
+                              CVV
+                            </label>
+                            <input
+                              type="text"
+                              value={depositState.cvv}
+                              onChange={(e) => {
+                                const val = e.target.value.replace(/\D/g, '').slice(0, 4);
+                                setDepositState(prev => ({ ...prev, cvv: val }));
+                              }}
+                              placeholder="123"
+                              maxLength={4}
+                              className="w-full px-4 py-3 rounded-xl border-2 border-sage-200 bg-white text-sage-900 placeholder-sage-400 focus:outline-none focus:border-sage-500 transition-colors"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {depositState.paymentMethod === 'onsite' && (
+                      <div className="p-4 bg-white">
+                        <p className="text-sm text-sage-600">
+                          Sie zahlen die Anzahlung von €{(calculateDeposit() / 100).toFixed(2)} direkt vor Ort.
+                          Der verbleibende Betrag wird ebenfalls bei Ihrem Termin beglichen.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  {depositError && (
+                    <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm flex items-center gap-2">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      {depositError}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex gap-3 mt-6">
+                  <button
+                    type="button"
+                    onClick={prevStep}
+                    className="flex-1 py-3 px-4 rounded-xl border-2 border-sage-200 text-sage-700 font-medium hover:bg-sage-50 transition-colors"
+                  >
+                    Zurück
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDepositPayment}
+                    disabled={processingPayment}
+                    className={`flex-1 py-3 px-4 rounded-xl font-medium transition-all ${
+                      processingPayment
+                        ? 'bg-sage-300 text-white cursor-not-allowed'
+                        : 'bg-sage-600 text-white hover:bg-sage-700 shadow-md'
+                    }`}
+                  >
+                    {processingPayment ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                        </svg>
+                        Wird verarbeitet...
+                      </span>
+                    ) : depositState.paymentMethod === 'card' ? (
+                      `€${(calculateDeposit() / 100).toFixed(2)} online bezahlen`
+                    ) : (
+                      'Vor-Ort-Zahlung fortsetzen'
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Step 7: Confirm */}
             {currentStep === 'confirm' && (
               <div>
                 <h2 className="text-lg font-semibold text-sage-900 mb-4">
                   Buchung bestätigen
                 </h2>
                 <div className="bg-sage-50 rounded-xl p-4 space-y-3">
+                  {/* 1. Service & Stylist */}
                   <div className="flex justify-between">
                     <span className="text-sage-600">Service</span>
                     <span className="font-medium text-sage-900">
@@ -1076,6 +1862,8 @@ export default function BookingPage() {
                       {selectedStylist?.name || 'Keine Präferenz'}
                     </span>
                   </div>
+
+                  {/* 2. Date & Time */}
                   <div className="flex justify-between">
                     <span className="text-sage-600">Datum</span>
                     <span className="font-medium text-sage-900">
@@ -1083,20 +1871,13 @@ export default function BookingPage() {
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-sage-600">Zeit</span>
+                    <span className="text-sage-600">Uhrzeit</span>
                     <span className="font-medium text-sage-900">
-                      {selectedTime ? formatTime(selectedTime) : '-'}
+                      {selectedTime ? formatTime(selectedTime.includes('T') ? selectedTime.split('T')[1] : selectedTime) : '-'}
                     </span>
                   </div>
-                  {formData.preferred_time && (
-                    <div className="flex justify-between">
-                      <span className="text-sage-600">Präferenz</span>
-                      <span className="font-medium text-sage-900">
-                        {formData.preferred_time === 'morning' ? 'Vormittag' : 
-                         formData.preferred_time === 'afternoon' ? 'Nachmittag' : 'Abend'}
-                      </span>
-                    </div>
-                  )}
+
+                  {/* 3. Add-ons */}
                   {selectedAddons.length > 0 && (
                     <div className="flex justify-between">
                       <span className="text-sage-600">Add-ons</span>
@@ -1105,35 +1886,150 @@ export default function BookingPage() {
                       </span>
                     </div>
                   )}
-                  <div className="flex justify-between">
-                    <span className="text-sage-600">Name</span>
-                    <span className="font-medium text-sage-900">
-                      {formData.customer_name}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sage-600">Telefon</span>
-                    <span className="font-medium text-sage-900">{formData.phone}</span>
-                  </div>
-                  {formData.email && (
+
+                  {/* 4. Customer Info */}
+                  <div className="border-t border-sage-200 pt-3">
+                    <p className="text-xs text-sage-500 uppercase tracking-wider mb-2">Kundendaten</p>
                     <div className="flex justify-between">
-                      <span className="text-sage-600">E-Mail</span>
-                      <span className="font-medium text-sage-900">{formData.email}</span>
+                      <span className="text-sage-600">Name</span>
+                      <span className="font-medium text-sage-900">{formData.customer_name}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sage-600">Telefon</span>
+                      <span className="font-medium text-sage-900">{formData.phone}</span>
+                    </div>
+                    {formData.email && (
+                      <div className="flex justify-between">
+                        <span className="text-sage-600">E-Mail</span>
+                        <span className="font-medium text-sage-900">{formData.email}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 5. Coupon Discount */}
+                  {couponState.valid && (
+                    <div className="bg-green-50 -mx-2 px-2 py-2 rounded-lg">
+                      <div className="flex justify-between items-center">
+                        <span className="text-green-700 flex items-center gap-1">
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                          </svg>
+                          Gutschein ({couponState.code})
+                        </span>
+                        <span className="font-semibold text-green-700">-{couponState.discount_percent > 0 ? `${couponState.discount_percent}%` : `€${(couponState.discount_cents / 100).toFixed(2)}`}</span>
+                      </div>
                     </div>
                   )}
+
+                  {/* 6. Deposit Status */}
+                  <div className="bg-sage-100 -mx-2 px-2 py-2 rounded-lg">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sage-700 flex items-center gap-1">
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                        </svg>
+                        {depositState.paymentMethod === 'card' ? 'Anzahlung bezahlt' : 'Anzahlung vor Ort'}
+                      </span>
+                      <span className="font-semibold text-sage-700">€{(calculateDeposit() / 100).toFixed(2)}</span>
+                    </div>
+                  </div>
+
+                  {/* 7. Anamnese Notes */}
+                  {(anamneseData.allergies || anamneseData.medications || anamneseData.pregnancy || anamneseData.hair_conditions) && (
+                    <div className="border-t border-sage-200 pt-3">
+                      <p className="text-xs text-sage-500 uppercase tracking-wider mb-2">Gesundheitsfragebogen</p>
+                      {anamneseData.allergies && (
+                        <div className="flex justify-between">
+                          <span className="text-sage-600">Allergien</span>
+                          <span className="font-medium text-sage-900 text-right max-w-xs">{anamneseData.allergies}</span>
+                        </div>
+                      )}
+                      {anamneseData.medications && (
+                        <div className="flex justify-between">
+                          <span className="text-sage-600">Medikamente</span>
+                          <span className="font-medium text-sage-900 text-right max-w-xs">{anamneseData.medications}</span>
+                        </div>
+                      )}
+                      {anamneseData.pregnancy && (
+                        <div className="flex justify-between">
+                          <span className="text-sage-600">Schwangerschaft</span>
+                          <span className="font-medium text-sage-900">{anamneseData.pregnancy === 'yes' ? 'Ja' : 'Nein'}</span>
+                        </div>
+                      )}
+                      {anamneseData.hair_conditions && (
+                        <div className="flex justify-between">
+                          <span className="text-sage-600">Haarerkrankungen</span>
+                          <span className="font-medium text-sage-900 text-right max-w-xs">{anamneseData.hair_conditions}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* 8. Customer Notes */}
                   {formData.notes && (
                     <div className="border-t border-sage-200 pt-3">
                       <span className="text-sage-600">Notizen</span>
                       <p className="font-medium text-sage-900 mt-1 italic">"{formData.notes}"</p>
                     </div>
                   )}
-                  <div className="border-t border-sage-200 pt-3 flex justify-between">
-                    <span className="text-sage-600">Preis</span>
-                    <span className="font-semibold text-sage-900">
-                      €{((selectedService?.price || 0) + selectedAddons.reduce((s, a) => s + a.price, 0)).toFixed(2)}
-                    </span>
+
+                  {/* 9. Price Breakdown */}
+                  <div className="border-t border-sage-200 pt-3 space-y-1">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-sage-500">Service</span>
+                      <span className="text-sage-700">€{((selectedService?.price || 0) / 100).toFixed(2)}</span>
+                    </div>
+                    {selectedAddons.length > 0 && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-sage-500">Add-ons</span>
+                        <span className="text-sage-700">+€{(selectedAddons.reduce((s, a) => s + a.price, 0) / 100).toFixed(2)}</span>
+                      </div>
+                    )}
+                    {couponState.valid && (
+                      <div className="flex justify-between text-sm text-green-600">
+                        <span>Rabatt</span>
+                        <span>-€{(couponState.discount_cents / 100).toFixed(2)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-sm">
+                      <span className="text-sage-500">Bereits bezahlt</span>
+                      <span className="text-green-600">-€{(calculateDeposit() / 100).toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between font-semibold text-lg pt-2 border-t border-sage-200">
+                      <span className="text-sage-700">Restbetrag vor Ort</span>
+                      <span className="text-sage-900">€{Math.max(0, (calculateTotal() - calculateDeposit()) / 100).toFixed(2)}</span>
+                    </div>
                   </div>
                 </div>
+
+                {/* Feature highlights */}
+                <div className="mt-6 grid grid-cols-2 gap-3">
+                  <div className="flex items-center gap-2 text-sm text-sage-600">
+                    <svg className="w-4 h-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Kostenlose Stornierung
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-sage-600">
+                    <svg className="w-4 h-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    SMS-Erinnerung
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-sage-600">
+                    <svg className="w-4 h-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    SSL-verschlüsselt
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-sage-600">
+                    <svg className="w-4 h-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Sofort-Bestätigung
+                  </div>
+                </div>
+
                 <p className="text-xs text-sage-500 mt-4 text-center">
                   Mit der Buchung stimmen Sie unseren AGB zu. Sie erhalten eine
                   Bestätigung per SMS.
@@ -1211,12 +2107,11 @@ export default function BookingPage() {
                 </button>
               )}
             </div>
+            </div>
           </div>
-        </div>
 
-        {/* Booking Summary Sidebar - Only on confirm step */}
-        {currentStep === 'confirm' && (
-          <div className="hidden lg:block w-80 flex-shrink-0">
+          {/* Sticky Booking Summary Sidebar - visible on md+ screens, inside grid */}
+          <div className="hidden md:block md:col-span-1">
             <BookingSummarySidebar
               service={selectedService}
               stylist={selectedStylist}
@@ -1227,7 +2122,7 @@ export default function BookingPage() {
               notes={formData.notes}
             />
           </div>
-        )}
+        </div>
       </main>
 
       {/* Footer */}

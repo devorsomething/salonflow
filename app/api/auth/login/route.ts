@@ -1,51 +1,29 @@
 import { NextResponse } from 'next/server';
+import { getDb } from '@/lib/db/index';
 
-const DEMO_ADMIN = {
-  email: 'demo@salonflow.app',
-  password: 'demo123',
-  name: 'Demo Admin',
-  salonId: 'demo-salon-001',
-  salonName: 'Friseur Meisterstück',
-};
+function verifyUser(email: string, password: string) {
+  const db = getDb();
+  const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email) as any;
+  if (!user) return null;
+  // Plain text check for demo
+  if (user.password_hash !== password) return null;
+  return { id: user.id, email: user.email, name: user.name, salonId: user.salon_id };
+}
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const { email, password } = body;
-
+    const { email, password } = await request.json();
     if (!email || !password) {
-      return NextResponse.json({ error: 'Email und Passwort erforderlich' }, { status: 400 });
+      return NextResponse.json({ error: 'Email and password required' }, { status: 400 });
     }
-
-    // Demo mode hardcoded credentials
-    if (email === DEMO_ADMIN.email && password === DEMO_ADMIN.password) {
-      const response = NextResponse.json({
-        success: true,
-        user: {
-          email: DEMO_ADMIN.email,
-          name: DEMO_ADMIN.name,
-          salonId: DEMO_ADMIN.salonId,
-          salonName: DEMO_ADMIN.salonName,
-        }
-      });
-
-      // Set session cookie (works on HTTP for demo)
-      response.cookies.set('salonflow_session', Buffer.from(JSON.stringify({
-        email: DEMO_ADMIN.email,
-        salonId: DEMO_ADMIN.salonId,
-        salonName: DEMO_ADMIN.salonName,
-      })).toString('base64'), {
-        httpOnly: true,
-        sameSite: 'lax',
-        maxAge: 60 * 60 * 24 * 7, // 1 week
-        path: '/',
-      });
-
-      return response;
+    const user = verifyUser(email, password);
+    if (!user) {
+      return NextResponse.json({ error: 'Ungültige Anmeldedaten' }, { status: 401 });
     }
-
-    return NextResponse.json({ error: 'Ungültige Anmeldedaten' }, { status: 401 });
+    // Return token in body — frontend stores in localStorage
+    return NextResponse.json({ success: true, token: user.id, user: { email: user.email, name: user.name } });
   } catch (err) {
-    return NextResponse.json({ error: 'Server error' }, { status: 500 });
+    console.error('Login error:', err);
+    return NextResponse.json({ error: 'Server error', detail: String(err) }, { status: 500 });
   }
 }
