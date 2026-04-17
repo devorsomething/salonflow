@@ -1,0 +1,133 @@
+{
+  "name": "SalonFlow Email SMTP",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "salonflow-email-smtp",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "node-email-webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.2,
+      "position": [
+        260,
+        300
+      ],
+      "webhookId": "salonflow-email-smtp"
+    },
+    {
+      "parameters": {
+        "jsCode": "const payload = $input.first().json.body || {};\n\nconst escapeHtml = (value) => String(value ?? '')\n  .replace(/&/g, '&amp;')\n  .replace(/</g, '&lt;')\n  .replace(/>/g, '&gt;')\n  .replace(/\"/g, '&quot;')\n  .replace(/'/g, '&#39;');\n\nconst parseDate = (value) => {\n  if (!value) return null;\n  const date = new Date(value);\n  return Number.isNaN(date.getTime()) ? null : date;\n};\n\nconst asDate = parseDate(payload.start_time);\nconst formatDate = (value) => {\n  const date = value instanceof Date ? value : parseDate(value);\n  if (!date) return String(value || '—');\n  return date.toLocaleDateString('de-DE', { day: '2-digit', month: 'long', year: 'numeric' });\n};\nconst formatTime = (value) => {\n  const date = value instanceof Date ? value : parseDate(value);\n  if (!date) return String(value || '—');\n  return date.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', hour12: false });\n};\n\nconst type = payload.type || '24h';\nconst customerName = payload.customer_name || 'Kunde';\nconst serviceName = payload.service_name || 'Termin';\nconst stylistName = payload.stylist_name || 'Ihr BookCut Team';\nconst salonName = payload.salon_name || 'BookCut';\nconst salonPhone = payload.salon_phone || '';\nconst salonEmail = payload.salon_email || 'termin@bookcut.app';\nconst appointmentDate = formatDate(asDate || payload.start_time);\nconst appointmentTime = formatTime(asDate || payload.start_time);\nconst contactLine = [salonPhone, salonEmail].filter(Boolean).join(' · ') || 'termin@bookcut.app';\n\nconst palette = {\n  ink: '#0F1C3F',\n  inkSoft: '#425066',\n  gold: '#C9A84C',\n  sand: '#F4F1EA',\n  card: '#F7F8FB',\n  border: '#E6EAF1',\n};\n\nconst content = {\n  confirm: {\n    eyebrow: 'Booking bestätigt',\n    headline: 'Ihr Termin bei BookCut ist fix eingeplant.',\n    intro: 'Vielen Dank für Ihre Buchung. Wir haben alles für Ihren Besuch vorbereitet und freuen uns darauf, Sie im Salon willkommen zu heißen.',\n    note: 'Wenn Sie noch etwas anpassen möchten, antworten Sie einfach auf diese E-Mail. Wir kümmern uns schnell darum.',\n    subject: 'Ihr Termin wurde bestätigt',\n  },\n  '24h': {\n    eyebrow: 'Erinnerung für morgen',\n    headline: 'Morgen sehen wir uns bei BookCut.',\n    intro: 'Nur eine kurze Erinnerung: Ihr gebuchter Termin steht morgen an. Hier finden Sie alle Details noch einmal kompakt auf einen Blick.',\n    note: 'Bitte planen Sie für Ihre Ankunft ein paar Minuten Vorlauf ein. Falls Sie verschieben müssen, geben Sie uns bitte rechtzeitig Bescheid.',\n    subject: `Erinnerung: Ihr Termin am ${appointmentDate}`,\n  },\n  '2h': {\n    eyebrow: 'Ihr Termin startet gleich',\n    headline: 'In Kürze geht es los.',\n    intro: 'Ihr Termin rückt näher. Jetzt ist ein guter Moment, um entspannt loszufahren und sich kurz auf Ihren Besuch bei BookCut einzustimmen.',\n    note: 'Falls kurzfristig etwas dazwischenkommt, informieren Sie uns bitte so schnell wie möglich.',\n    subject: `Ihr Termin heute um ${appointmentTime}`,\n  },\n};\n\nconst selected = content[type] || content['24h'];\nconst subject = payload.emailSubject || selected.subject;\nconst text = payload.emailBody || [\n  `Hallo ${customerName},`,\n  '',\n  selected.intro,\n  '',\n  `Datum: ${appointmentDate}`,\n  `Uhrzeit: ${appointmentTime}`,\n  `Service: ${serviceName}`,\n  `Stylist: ${stylistName}`,\n  '',\n  selected.note,\n  '',\n  `BookCut`,\n  contactLine,\n].join('\\n');\n\nconst html = payload.emailHtml || `<!DOCTYPE html>\n<html lang=\"de\">\n  <body style=\"margin:0;padding:0;background:${palette.sand};font-family:'Plus Jakarta Sans',Arial,Helvetica,sans-serif;color:${palette.ink};\">\n    <div style=\"display:none;max-height:0;overflow:hidden;opacity:0;\">${escapeHtml(selected.subject)} – ${escapeHtml(serviceName)} am ${escapeHtml(appointmentDate)} um ${escapeHtml(appointmentTime)}</div>\n    <table role=\"presentation\" width=\"100%\" cellspacing=\"0\" cellpadding=\"0\" style=\"background:${palette.sand};padding:28px 12px;\">\n      <tr>\n        <td align=\"center\">\n          <table role=\"presentation\" width=\"100%\" cellspacing=\"0\" cellpadding=\"0\" style=\"max-width:680px;background:#ffffff;border-radius:26px;overflow:hidden;box-shadow:0 22px 64px rgba(15,28,63,0.14);\">\n            <tr>\n              <td style=\"padding:20px 28px;background:${palette.ink};color:#ffffff;\">\n                <table role=\"presentation\" width=\"100%\" cellspacing=\"0\" cellpadding=\"0\">\n                  <tr>\n                    <td align=\"left\" style=\"font-size:13px;letter-spacing:0.22em;text-transform:uppercase;color:rgba(255,255,255,0.72);font-weight:700;\">BookCut</td>\n                    <td align=\"right\" style=\"font-size:12px;color:rgba(255,255,255,0.72);\">${escapeHtml(selected.eyebrow)}</td>\n                  </tr>\n                </table>\n              </td>\n            </tr>\n            <tr>\n              <td style=\"background:linear-gradient(135deg, ${palette.ink} 0%, #182B62 60%, ${palette.gold} 170%);padding:36px 32px 42px;\">\n                <div style=\"display:inline-block;padding:8px 14px;border-radius:999px;border:1px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.04);font-size:12px;letter-spacing:0.14em;text-transform:uppercase;color:#F4E2A9;font-weight:700;\">${escapeHtml(selected.eyebrow)}</div>\n                <h1 style=\"margin:18px 0 12px;font-size:34px;line-height:1.12;color:#ffffff;font-weight:800;letter-spacing:-0.03em;\">${escapeHtml(selected.headline)}</h1>\n                <p style=\"margin:0;max-width:520px;font-size:16px;line-height:1.75;color:rgba(255,255,255,0.84);\">${escapeHtml(selected.intro)}</p>\n              </td>\n            </tr>\n            <tr>\n              <td style=\"padding:32px;\">\n                <p style=\"margin:0 0 18px;font-size:16px;line-height:1.75;color:${palette.inkSoft};\">Hallo <strong style=\"color:${palette.ink};\">${escapeHtml(customerName)}</strong>,</p>\n                <table role=\"presentation\" width=\"100%\" cellspacing=\"0\" cellpadding=\"0\" style=\"border-collapse:separate;border-spacing:0 12px;\">\n                  <tr>\n                    <td style=\"width:33.33%;padding:18px 16px;background:${palette.card};border:1px solid ${palette.border};border-radius:18px;vertical-align:top;\">\n                      <div style=\"font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:#8C7743;font-weight:700;margin-bottom:8px;\">Datum</div>\n                      <div style=\"font-size:18px;line-height:1.4;color:${palette.ink};font-weight:800;\">${escapeHtml(appointmentDate)}</div>\n                    </td>\n                    <td style=\"width:33.33%;padding:18px 16px;background:${palette.card};border:1px solid ${palette.border};border-radius:18px;vertical-align:top;\">\n                      <div style=\"font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:#8C7743;font-weight:700;margin-bottom:8px;\">Uhrzeit</div>\n                      <div style=\"font-size:18px;line-height:1.4;color:${palette.ink};font-weight:800;\">${escapeHtml(appointmentTime)}</div>\n                    </td>\n                    <td style=\"width:33.33%;padding:18px 16px;background:${palette.card};border:1px solid ${palette.border};border-radius:18px;vertical-align:top;\">\n                      <div style=\"font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:#8C7743;font-weight:700;margin-bottom:8px;\">Service</div>\n                      <div style=\"font-size:18px;line-height:1.4;color:${palette.ink};font-weight:800;\">${escapeHtml(serviceName)}</div>\n                    </td>\n                  </tr>\n                </table>\n\n                <div style=\"margin-top:18px;padding:24px;background:linear-gradient(180deg,#FFF9EC 0%,#FFFDF6 100%);border:1px solid rgba(201,168,76,0.28);border-radius:22px;\">\n                  <div style=\"font-size:12px;letter-spacing:0.14em;text-transform:uppercase;color:#8C7743;font-weight:700;margin-bottom:12px;\">Ihr Termin im Überblick</div>\n                  <p style=\"margin:0 0 10px;font-size:16px;line-height:1.75;color:${palette.inkSoft};\"><strong style=\"color:${palette.ink};\">Stylist:</strong> ${escapeHtml(stylistName)}</p>\n                  <p style=\"margin:0;font-size:16px;line-height:1.75;color:${palette.inkSoft};\"><strong style=\"color:${palette.ink};\">Kontakt:</strong> ${escapeHtml(contactLine)}</p>\n                </div>\n\n                <div style=\"margin-top:22px;padding:18px 20px;border-left:4px solid ${palette.gold};background:#FBFCFE;border-radius:0 16px 16px 0;\">\n                  <p style=\"margin:0;font-size:15px;line-height:1.8;color:${palette.inkSoft};\">${escapeHtml(selected.note)}</p>\n                </div>\n              </td>\n            </tr>\n            <tr>\n              <td style=\"padding:0 32px 32px;\">\n                <div style=\"height:1px;background:linear-gradient(90deg,rgba(15,28,63,0),rgba(15,28,63,0.14),rgba(15,28,63,0));margin-bottom:20px;\"></div>\n                <table role=\"presentation\" width=\"100%\" cellspacing=\"0\" cellpadding=\"0\">\n                  <tr>\n                    <td style=\"font-size:14px;line-height:1.8;color:#7B8594;\">\n                      <strong style=\"color:${palette.ink};font-size:15px;\">${escapeHtml(salonName)}</strong><br>\n                      ${escapeHtml(contactLine)}\n                    </td>\n                    <td align=\"right\" style=\"font-size:12px;color:#8B93A2;letter-spacing:0.08em;text-transform:uppercase;\">Book smarter. Look sharper.</td>\n                  </tr>\n                </table>\n              </td>\n            </tr>\n          </table>\n        </td>\n      </tr>\n    </table>\n  </body>\n</html>`;\n\nreturn [{\n  json: {\n    body: payload,\n    channel: payload.channel || 'email',\n    toEmail: payload.customer_email || null,\n    subject,\n    text,\n    html,\n  },\n}];"
+      },
+      "id": "node-email-prepare",
+      "name": "Prepare Email Content",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        540,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "email",
+        "operation": "send",
+        "fromEmail": "termin@bookcut.app",
+        "toEmail": "={{ $json.toEmail }}",
+        "subject": "={{ $json.subject }}",
+        "emailFormat": "both",
+        "text": "={{ $json.text }}",
+        "html": "={{ $json.html }}",
+        "options": {
+          "appendAttribution": false,
+          "replyTo": "termin@bookcut.app"
+        }
+      },
+      "id": "node-email-send",
+      "name": "Send Email SMTP",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        840,
+        300
+      ],
+      "credentials": {
+        "smtp": {
+          "id": "smtp-bookcut-app",
+          "name": "BookCut SMTP"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nreturn [{ json: { emailDone: true, channel: data.channel || 'email', messageId: 'smtp-' + Date.now(), recipient: data.toEmail || null } }];"
+      },
+      "id": "node-email-response",
+      "name": "Return Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Prepare Email Content",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Email Content": {
+      "main": [
+        [
+          {
+            "node": "Send Email SMTP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Email SMTP": {
+      "main": [
+        [
+          {
+            "node": "Return Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Return Result": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1",
+  "id": "salonflow-email-smtp",
+  "meta": {
+    "templateCredsSetup": [
+      {
+        "name": "BookCut SMTP",
+        "credentialsId": "smtp-bookcut-app"
+      }
+    ]
+  },
+  "tags": []
+}
