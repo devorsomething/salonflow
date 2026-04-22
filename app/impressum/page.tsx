@@ -8,14 +8,14 @@ export default function ImpressumPage() {
           <div>
             <h2 className="text-lg font-semibold text-sage-900 mb-2">Angaben gemäß § 5 ECG</h2>
             <p className="mb-2">
-              <strong className="text-sage-900">SalonFlow</strong><br />
+              <strong className="text-sage-900">BookCut</strong><br />
               c/o Timo Miro Gavanelli<br />
               Bregenz<br />
               Vorarlberg, Österreich
             </p>
             <p>
-              <strong className="text-sage-900">E-Mail:</strong> hallo@salonflow.app<br />
-              <strong className="text-sage-900">Website:</strong> https://salonflow.app
+              <strong className="text-sage-900">E-Mail:</strong> hallo@bookcut.app<br />
+              <strong className="text-sage-900">Website:</strong> https://bookcut.app
             </p>
           </div>
 

@@ -20,7 +20,7 @@ export async function POST(request: Request) {
     // const smsRes = await fetch('https://gateway.sms77.io/api/sms', {
     //   method: 'POST',
     //   headers: { 'Authorization': `Bearer ${process.env.SMS77_API_KEY}` },
-    //   body: JSON.stringify({ to: phone, text: message, from: 'SalonFlow' }),
+    //   body: JSON.stringify({ to: phone, text: message, from: 'BookCut' }),
     // });
 
     return NextResponse.json({

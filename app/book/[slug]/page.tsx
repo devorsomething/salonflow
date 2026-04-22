@@ -2127,7 +2127,7 @@ export default function BookingPage() {
 
       {/* Footer */}
       <footer className="mt-8 py-4 text-center text-xs text-sage-500">
-        <p>Bereitgestellt von SalonFlow</p>
+        <p>Bereitgestellt von BookCut</p>
       </footer>
     </div>
   );

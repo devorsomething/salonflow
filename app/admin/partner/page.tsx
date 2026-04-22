@@ -559,7 +559,7 @@ export default function AdminPartnerPage() {
                     {
                       step: "01",
                       title: "Code teilen",
-                      desc: "Gib deinen persönlichen Partner-Code an Salon-Betreiber weiter, die noch kein SalonFlow nutzen.",
+                      desc: "Gib deinen persönlichen Partner-Code an Salon-Betreiber weiter, die noch kein BookCut nutzen.",
                     },
                     {
                       step: "02",

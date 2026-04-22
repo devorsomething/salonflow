@@ -297,7 +297,7 @@ export default function RegisterPage() {
         {/* Header */}
         <div className="text-center mb-10">
           <h1 className="text-3xl font-semibold text-[#0F1C3F] mb-2">
-            SalonFlow
+            BookCut
           </h1>
           <p className="text-[#0F1C3F]/70">
             Erstellen Sie Ihr Konto in wenigen Schritten

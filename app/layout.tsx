@@ -11,7 +11,7 @@ const plusJakartaSans = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "SalonFlow — Terminbuchung für Salons",
+  title: "BookCut — Terminbuchung für Salons",
   description: "Online-Terminbuchung, SMS-Erinnerungen und Kundenverwaltung für deinen Salon. Ohne Vertrag, sofort einsatzbereit.",
   keywords: "Salon Terminbuchung, Friseur Software, Beauty Salon Austria",
 };

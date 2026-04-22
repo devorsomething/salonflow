@@ -151,7 +151,7 @@ export default function FeaturesPage() {
             Alle Features für deinen Salon
           </h1>
           <p className="text-xl text-sage-600 max-w-2xl mx-auto">
-            Vom ersten Termin bis zur Kundenbindung — SalonFlow begleitet dich durch den ganzen Alltag.
+            Vom ersten Termin bis zur Kundenbindung — BookCut begleitet dich durch den ganzen Alltag.
           </p>
         </div>
       </section>

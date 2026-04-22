@@ -219,7 +219,7 @@ function ApplicationModal({
         <div className="flex items-center justify-between p-6 border-b border-white/10">
           <div>
             <h2 className="text-xl font-bold text-white">Partner werden</h2>
-            <p className="text-sm text-white/50 mt-1">Werbe SalonFlow in deinem Salon</p>
+            <p className="text-sm text-white/50 mt-1">Werbe BookCut in deinem Salon</p>
           </div>
           <button
             onClick={onClose}
@@ -391,7 +391,7 @@ export default function MarketplacePage() {
               {/* Badge */}
               <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-cyan-500/10 border border-cyan-500/20 rounded-full mb-6">
                 <Store className="w-3.5 h-3.5 text-cyan-400" />
-                <span className="text-xs font-medium text-cyan-400">SalonFlow Partner Netzwerk</span>
+                <span className="text-xs font-medium text-cyan-400">BookCut Partner Netzwerk</span>
               </div>
 
               <h1 className="text-4xl sm:text-5xl font-bold text-white mb-6 tracking-tight">
@@ -399,7 +399,7 @@ export default function MarketplacePage() {
                 <span className="bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">Salons</span>
               </h1>
               <p className="text-lg text-white/60 leading-relaxed mb-10">
-                Entdecke führende Salons in Österreich, die SalonFlow nutzen. Buche direkt online und profitiere von exklusiven Partner-Vorteilen.
+                Entdecke führende Salons in Österreich, die BookCut nutzen. Buche direkt online und profitiere von exklusiven Partner-Vorteilen.
               </p>
 
               <button
@@ -514,7 +514,7 @@ export default function MarketplacePage() {
                   <span className="text-xs font-medium text-cyan-400">Exklusiv für Partner</span>
                 </div>
                 <h2 className="text-2xl sm:text-3xl font-bold text-white mb-4">
-                  Werde Teil des SalonFlow-Netzwerks
+                  Werde Teil des BookCut-Netzwerks
                 </h2>
                 <p className="text-white/60 max-w-xl mx-auto mb-8">
                   Als Partner erhältst du eine Provision für jeden neuen Salon, den du empiehlst. Keine Kosten, keine Verpflichtungen — nur Vorteile.

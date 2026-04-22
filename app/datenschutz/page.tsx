@@ -8,10 +8,10 @@ export default function DatenschutzPage() {
           <div>
             <h2 className="text-lg font-semibold text-sage-900 mb-2">1. Verantwortlicher</h2>
             <p>
-              <strong className="text-sage-900">SalonFlow</strong><br />
+              <strong className="text-sage-900">BookCut</strong><br />
               c/o Timo Miro Gavanelli<br />
               Bregenz, Vorarlberg, Österreich<br />
-              E-Mail: hallo@salonflow.app
+              E-Mail: hallo@bookcut.app
             </p>
           </div>
 
@@ -71,7 +71,7 @@ export default function DatenschutzPage() {
               <li>Widerspruch gegen die Verarbeitung</li>
             </ul>
             <p className="mt-2">
-              Um diese Rechte auszuüben, schreib uns: hallo@salonflow.app
+              Um diese Rechte auszuüben, schreib uns: hallo@bookcut.app
             </p>
           </div>
 

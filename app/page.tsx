@@ -43,7 +43,7 @@ const steps = [
   {
     num: '01',
     title: 'Demo testen',
-    desc: 'Sieh dir an, wie SalonFlow für deinen Salon funktioniert. Kein Login nötig.',
+    desc: 'Sieh dir an, wie BookCut für deinen Salon funktioniert. Kein Login nötig.',
   },
   {
     num: '02',
@@ -85,7 +85,7 @@ export default function Home() {
             </h1>
 
             <p className="text-xl text-sage-700 leading-relaxed mb-10 max-w-2xl">
-              SalonFlow macht Schluss mit Telefonchaos und verpassten Terminen. 
+              BookCut macht Schluss mit Telefonchaos und verpassten Terminen. 
               Deine Kunden buchen online — du hast mehr Zeit für das, was zählt.
             </p>
 
@@ -117,7 +117,7 @@ export default function Home() {
                   <div className="w-3 h-3 rounded-full bg-yellow-400" />
                   <div className="w-3 h-3 rounded-full bg-green-400" />
                 </div>
-                <span className="text-sage-200 text-xs ml-2">SalonFlow — Buchungswidget</span>
+                <span className="text-sage-200 text-xs ml-2">BookCut — Buchungswidget</span>
               </div>
               <div className="p-6 bg-gradient-to-br from-sage-50 to-white">
                 <div className="flex items-center gap-4 mb-6">
@@ -166,7 +166,7 @@ export default function Home() {
             </h2>
             <p className="text-lg text-sage-600 max-w-2xl mx-auto">
               Kein kompliziertes System, keine monatliche Grundgebühr. 
-              SalonFlow wächst mit deinem Business.
+              BookCut wächst mit deinem Business.
             </p>
           </div>
 

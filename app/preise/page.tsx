@@ -218,10 +218,10 @@ export default function PreisePage() {
             Wir helfen dir gerne bei der Auswahl des richtigen Plans.
           </p>
           <Link
-            href="mailto:hallo@salonflow.app"
+            href="mailto:hallo@bookcut.app"
             className="inline-flex items-center gap-2 px-8 py-4 bg-sage-600 text-white font-semibold rounded-xl hover:bg-sage-500 transition-colors"
           >
-            hallo@salonflow.app
+            hallo@bookcut.app
           </Link>
         </div>
       </section>

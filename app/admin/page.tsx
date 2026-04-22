@@ -2168,7 +2168,7 @@ function Sidebar({
           <Scissors className="w-5 h-5 text-white" />
         </div>
         <div>
-          <h1 className="font-semibold text-sage-900">SalonFlow</h1>
+          <h1 className="font-semibold text-sage-900">BookCut</h1>
           <p className="text-xs text-sand-500">Admin</p>
         </div>
       </div>
@@ -2399,7 +2399,7 @@ export default function AdminDashboard() {
         <header className="bg-white border-b border-sand-200 px-6 py-4">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-xl font-semibold text-sage-900">{salon?.name || "SalonFlow"}</h1>
+              <h1 className="text-xl font-semibold text-sage-900">{salon?.name || "BookCut"}</h1>
               <p className="text-xs text-sand-500">{format(new Date(), "EEEE, d. MMMM yyyy", { locale: de })}</p>
             </div>
             <div className="flex items-center gap-3">

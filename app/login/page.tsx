@@ -52,7 +52,7 @@ export default function LoginPage() {
         <div className="bg-white rounded-2xl shadow-lg p-8 border border-sand-200">
           <div className="text-center mb-8">
             <h1 className="text-2xl font-semibold text-sage-700 mb-2">
-              SalonFlow
+              BookCut
             </h1>
             <p className="text-sage-600 text-sm">
               Anmeldung für Salonpersonal
@@ -74,7 +74,7 @@ export default function LoginPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 className="w-full px-4 py-2.5 rounded-lg border border-sand-300 bg-sand-50 text-sage-950 placeholder-sage-400 focus:outline-none focus:ring-2 focus:ring-sage-500 focus:border-transparent transition"
-                placeholder="demo@salonflow.app"
+                placeholder="demo@bookcut.app"
               />
             </div>
 
