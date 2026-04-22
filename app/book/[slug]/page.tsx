@@ -719,9 +719,9 @@ export default function BookingPage() {
   const calculateTotal = (): number => {
     const servicePrice = selectedService?.price || 0;
     const addonsPrice = selectedAddons.reduce((sum, a) => sum + a.price, 0);
-    const subtotal = servicePrice + addonsPrice;
+    const subtotalCents = (servicePrice + addonsPrice) * 100;
     const discount = couponState.valid ? couponState.discount_cents : 0;
-    return Math.max(0, subtotal - discount);
+    return Math.max(0, subtotalCents - discount);
   };
 
   // Calculate deposit amount (min €5 or 20% of total, whichever is higher)
@@ -782,7 +782,7 @@ export default function BookingPage() {
     setCouponState(prev => ({ ...prev, error: '' }));
 
     try {
-      const orderCents = (selectedService?.price || 0) + selectedAddons.reduce((s, a) => s + a.price, 0);
+      const orderCents = ((selectedService?.price || 0) + selectedAddons.reduce((s, a) => s + a.price, 0)) * 100;
       const res = await fetch('/api/coupons/validate', {
         method: 'POST',
         headers: {
@@ -1441,23 +1441,6 @@ export default function BookingPage() {
                       </span>
                     </div>
                   </div>
-                </div>
-
-                <div className="flex gap-3 mt-6">
-                  <button
-                    type="button"
-                    onClick={prevStep}
-                    className="flex-1 py-3 px-4 rounded-xl border-2 border-sage-200 text-sage-700 font-medium hover:bg-sage-50 transition-colors"
-                  >
-                    Zurück
-                  </button>
-                  <button
-                    type="button"
-                    onClick={nextStep}
-                    className="flex-1 py-3 px-4 rounded-xl bg-sage-600 text-white font-medium hover:bg-sage-700 shadow-md transition-colors"
-                  >
-                    Weiter
-                  </button>
                 </div>
               </div>
             )}
