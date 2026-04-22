@@ -252,15 +252,15 @@ function seedDemoData(db: Database.Database) {
 
   // Seed reminders
   const reminders = [
-    { id: 'rem-1', rtype: 'appointment', days: 1, template: 'Hallo {{customer_name}}, wir erinnern Sie an Ihren Termin am {{date}} um {{time}}.' },
-    { id: 'rem-2', rtype: 'appointment', days: 7, template: 'Ihr Termin in einer Woche: {{date}} um {{time}}. Wir freuen uns auf Sie!' },
+    { id: 'rem-1', rtype: 'appointment', message: 'Hallo {{customer_name}}, wir erinnern Sie an Ihren Termin am {{date}} um {{time}}.' },
+    { id: 'rem-2', rtype: 'appointment', message: 'Ihr Termin in einer Woche: {{date}} um {{time}}. Wir freuen uns auf Sie!' },
   ];
   const insertRem = db.prepare(`
-    INSERT INTO reminders (id, salon_id, reminder_type, timing_days_before, message_template, active)
-    VALUES (?, ?, ?, ?, ?, 1)
+    INSERT INTO reminders (id, salon_id, reminder_type, message, status)
+    VALUES (?, ?, ?, ?, 'pending')
   `);
   for (const r of reminders) {
-    insertRem.run(r.id, 'demo-salon-001', r.rtype, r.days, r.template);
+    insertRem.run(r.id, 'demo-salon-001', r.rtype, r.message);
   }
 
   seedNewData(db);
