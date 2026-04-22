@@ -52,16 +52,19 @@ export async function POST(request: Request) {
       const appointment = getAppointmentById(result.id) as any;
       const webhookUrl =
         process.env.N8N_BOOKING_CONFIRMATION_WEBHOOK_URL ||
-        'https://n8n.devmiro.cloud/webhook/booking-confirmation';
+        'https://n8n.devmiro.cloud/webhook/salonflow-email-smtp';
 
       const payload = {
-        client_name: customer_name || appointment?.customer_name || 'Kunde',
-        client_phone: customer_phone || appointment?.customer_phone || '',
-        client_email: customer_email || appointment?.customer_email || '',
+        type: 'confirm',
+        customer_name: customer_name || appointment?.customer_name || 'Kunde',
+        customer_phone: customer_phone || appointment?.customer_phone || '',
+        customer_email: customer_email || appointment?.customer_email || '',
         service_name: appointment?.service_name || service_id,
         stylist_name: appointment?.stylist_name || stylist_id || 'Stylist',
-        appointment_time: appointment?.start_time || start_time,
-        salon_name: DEMO_SALON.name || 'SalonFlow Demo',
+        start_time: appointment?.start_time || start_time,
+        salon_name: DEMO_SALON.name || 'BookCut',
+        salon_phone: DEMO_SALON.phone || '',
+        salon_email: DEMO_SALON.email || 'termin@bookcut.app',
       };
 
       const n8nRes = await fetch(webhookUrl, {
@@ -83,7 +86,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       bookingId: result.id,
-      verifyToken: result.id,
+      verifyToken: Buffer.from(result.id).toString('base64'),
       message: 'Termin gebucht',
       confirmationTriggered,
       ...(confirmationError ? { confirmationError } : {}),
