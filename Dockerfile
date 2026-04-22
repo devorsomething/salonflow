@@ -43,6 +43,9 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 
+# Ensure data dir has correct perms (COPY overwrites)
+RUN chown -R nextjs:nogroup /app/data && chmod -R 777 /app/data
+
 USER nextjs
 
 EXPOSE 3000

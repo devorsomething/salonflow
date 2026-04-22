@@ -223,18 +223,20 @@ function seedDemoData(db: Database.Database) {
     insertPlan.run(p.id, 'demo-salon-001', p.name, p.desc, p.days, p.price, p.discount);
   }
 
-  // Seed memberships
-  const memberships = [
-    { id: 'mem-1', customer: 'cust-1', plan: 'plan-2', status: 'active' },
-    { id: 'mem-2', customer: 'cust-2', plan: 'plan-1', status: 'active' },
+  // Seed customer_memberships (linking customers to plans)
+  // Note: memberships table has mem-1/mem-2 (Monats-Abo/Jahres-Abo), membership_plans has plan-1/plan-2 (Basic/Premium)
+  // customer_memberships.membership_id references memberships.id, so we use mem-1/mem-2
+  const customerMemberships = [
+    { id: 'cm-1', customer: 'cust-1', membership: 'mem-1', status: 'active' },
+    { id: 'cm-2', customer: 'cust-2', membership: 'mem-2', status: 'active' },
   ];
-  const insertMem = db.prepare(`
-    INSERT INTO memberships (id, salon_id, customer_id, plan_id, status, start_date, end_date)
-    VALUES (?, ?, ?, ?, ?, date('now'), date('now', '+' || ? || ' days'))
+  const insertCustMem = db.prepare(`
+    INSERT INTO customer_memberships (id, customer_id, membership_id, start_date, end_date, status)
+    VALUES (?, ?, ?, date('now'), date('now', '+' || ? || ' days'), ?)
   `);
-  for (const m of memberships) {
-    const plan = plans.find(p => p.id === m.plan);
-    insertMem.run(m.id, 'demo-salon-001', m.customer, m.plan, m.status, plan?.days || 30);
+  for (const m of customerMemberships) {
+    const mem = memberships.find(p => p.id === m.membership);
+    insertCustMem.run(m.id, m.customer, m.membership, mem?.days || 30, m.status);
   }
 
   // Seed coupons
