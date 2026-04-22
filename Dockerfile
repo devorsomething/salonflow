@@ -34,8 +34,10 @@ RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
 # Create data directory for SQLite (before switching to non-root user)
-RUN mkdir -p /app/data && chown nextjs:nodejs /app/data && \
-    chown -R nextjs:nodejs /app/data
+RUN mkdir -p /app/data && chown -R nextjs:nogroup /app/data && chmod -R 777 /app/data
+
+# Make /app traversable for nextjs user
+RUN chmod 755 /app
 
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/.next/standalone ./

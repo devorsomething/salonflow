@@ -660,6 +660,19 @@ function initNewSchema(db: Database.Database) {
       FOREIGN KEY (appointment_id) REFERENCES appointments(id)
     );
 
+    CREATE TABLE IF NOT EXISTS membership_plans (
+      id TEXT PRIMARY KEY,
+      salon_id TEXT,
+      name TEXT NOT NULL,
+      description TEXT,
+      duration_days INTEGER NOT NULL,
+      price_cents INTEGER NOT NULL,
+      discount_percent INTEGER DEFAULT 0,
+      active INTEGER DEFAULT 1,
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (salon_id) REFERENCES salon(id)
+    );
+
     CREATE TABLE IF NOT EXISTS commission_plans (
       id TEXT PRIMARY KEY,
       salon_id TEXT,
