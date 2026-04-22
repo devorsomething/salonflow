@@ -636,7 +636,7 @@ function initNewSchema(db: Database.Database) {
       customer_id TEXT,
       appointment_id TEXT,
       reminder_type TEXT DEFAULT 'email',
-      scheduled_at TEXT NOT NULL,
+      scheduled_at TEXT,
       sent_at TEXT,
       status TEXT DEFAULT 'pending',
       message TEXT,
