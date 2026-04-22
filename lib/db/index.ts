@@ -223,22 +223,6 @@ function seedDemoData(db: Database.Database) {
     insertPlan.run(p.id, 'demo-salon-001', p.name, p.desc, p.days, p.price, p.discount);
   }
 
-  // Seed customer_memberships (linking customers to plans)
-  // Note: memberships table has mem-1/mem-2 (Monats-Abo/Jahres-Abo), membership_plans has plan-1/plan-2 (Basic/Premium)
-  // customer_memberships.membership_id references memberships.id, so we use mem-1/mem-2
-  const customerMemberships = [
-    { id: 'cm-1', customer: 'cust-1', membership: 'mem-1', status: 'active' },
-    { id: 'cm-2', customer: 'cust-2', membership: 'mem-2', status: 'active' },
-  ];
-  const insertCustMem = db.prepare(`
-    INSERT INTO customer_memberships (id, customer_id, membership_id, start_date, end_date, status)
-    VALUES (?, ?, ?, date('now'), date('now', '+' || ? || ' days'), ?)
-  `);
-  for (const m of customerMemberships) {
-    const mem = memberships.find(p => p.id === m.membership);
-    insertCustMem.run(m.id, m.customer, m.membership, mem?.days || 30, m.status);
-  }
-
   // Seed coupons
   const coupons = [
     { id: 'coupon-1', code: 'WELCOME10', dtype: 'percent', dvalue: 10, minorder: 0, maxuses: 100, validfrom: null, validuntil: null },
