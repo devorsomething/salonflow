@@ -16,7 +16,7 @@ export function getDb(): Database.Database {
   if (!_db) {
     _db = new Database(DB_PATH);
     _db.pragma('journal_mode = WAL');
-    _db.pragma('foreign_keys = OFF'); // Disabled: schema has circular/deferred FK issues
+    _db.pragma('foreign_keys = ON');
     initSchema(_db);
     seedDemoData(_db);
   }
@@ -657,6 +657,18 @@ function initNewSchema(db: Database.Database) {
       active INTEGER DEFAULT 1,
       created_at TEXT DEFAULT (datetime('now')),
       FOREIGN KEY (salon_id) REFERENCES salon(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS commissions (
+      id TEXT PRIMARY KEY,
+      salon_id TEXT,
+      stylist_id TEXT,
+      service_id TEXT,
+      commission_percent REAL NOT NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (salon_id) REFERENCES salon(id),
+      FOREIGN KEY (stylist_id) REFERENCES stylists(id),
+      FOREIGN KEY (service_id) REFERENCES services(id)
     );
 
     CREATE TABLE IF NOT EXISTS commission_plans (
