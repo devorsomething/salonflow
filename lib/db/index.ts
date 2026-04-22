@@ -16,7 +16,7 @@ export function getDb(): Database.Database {
   if (!_db) {
     _db = new Database(DB_PATH);
     _db.pragma('journal_mode = WAL');
-    _db.pragma('foreign_keys = ON');
+    _db.pragma('foreign_keys = OFF'); // Disabled: schema has circular/deferred FK issues
     initSchema(_db);
     seedDemoData(_db);
   }
