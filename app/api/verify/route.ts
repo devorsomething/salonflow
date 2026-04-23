@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getAppointmentById } from '@/lib/db';
+import { getDb } from '@/lib/db';
 
 export async function GET(request: Request) {
   try {
@@ -17,7 +17,17 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 400 });
     }
 
-    const booking = getAppointmentById(bookingId) as any;
+    // Fetch appointment with service price
+    const db = getDb();
+    const booking = db.prepare(`
+      SELECT a.*, s.name as service_name, s.price_cents, s.duration_minutes,
+             st.name as stylist_name
+      FROM appointments a
+      LEFT JOIN services s ON a.service_id = s.id
+      LEFT JOIN stylists st ON a.stylist_id = st.id
+      WHERE a.id = ?
+    `).get(bookingId) as any;
+
     if (!booking) {
       return NextResponse.json({ error: 'Booking not found' }, { status: 404 });
     }
@@ -25,8 +35,8 @@ export async function GET(request: Request) {
     return NextResponse.json({
       booking: {
         id: booking.id,
-        serviceName: booking.service_name,
-        stylistName: booking.stylist_name,
+        serviceName: booking.service_name || '—',
+        stylistName: booking.stylist_name || '—',
         date: booking.start_time.split('T')[0],
         time: booking.start_time.split('T')[1]?.slice(0, 5) || '',
         customerName: booking.customer_name,

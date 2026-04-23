@@ -431,6 +431,7 @@ function BookingSummarySidebar({
   addons,
   preferredTime,
   notes,
+  couponState,
 }: {
   service: Service | null;
   stylist: Stylist | null;
@@ -439,8 +440,11 @@ function BookingSummarySidebar({
   addons: Addon[];
   preferredTime: string;
   notes: string;
+  couponState?: { valid: boolean; discount_cents: number; code: string; discount_percent?: number };
 }) {
-  const totalPriceCents = (service?.price || 0) * 100 + addons.reduce((sum, a) => sum + a.price_cents, 0);
+  const subtotalCents = (service?.price || 0) * 100 + addons.reduce((sum, a) => sum + a.price_cents, 0);
+  const discountCents = couponState?.valid ? couponState.discount_cents : 0;
+  const totalPriceCents = Math.max(0, subtotalCents - discountCents);
 
   const preferredTimeLabel = {
     morning: 'Vormittag (8-12 Uhr)',
@@ -513,6 +517,12 @@ function BookingSummarySidebar({
             <p className="text-sage-600 font-medium">Gesamt</p>
             <p className="text-xl font-bold text-sage-900">€{(totalPriceCents / 100).toFixed(2)}</p>
           </div>
+          {couponState?.valid && discountCents > 0 && (
+            <div className="flex justify-between items-center text-green-600">
+              <p className="text-sm">Rabatt</p>
+              <p className="text-sm font-medium">-€{(discountCents / 100).toFixed(2)}</p>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -2107,6 +2117,7 @@ export default function BookingPage() {
               addons={selectedAddons}
               preferredTime={formData.preferred_time}
               notes={formData.notes}
+              couponState={couponState}
             />
           </div>
         </div>
