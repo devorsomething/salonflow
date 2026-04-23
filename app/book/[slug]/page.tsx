@@ -440,9 +440,7 @@ function BookingSummarySidebar({
   preferredTime: string;
   notes: string;
 }) {
-  const servicePrice = service?.price || 0;
-  const addonsPrice = addons.reduce((sum, a) => sum + a.price_cents, 0);
-  const totalPrice = servicePrice + addonsPrice;
+  const totalPriceCents = (service?.price || 0) * 100 + addons.reduce((sum, a) => sum + a.price_cents, 0);
 
   const preferredTimeLabel = {
     morning: 'Vormittag (8-12 Uhr)',
@@ -513,7 +511,7 @@ function BookingSummarySidebar({
         <div className="border-t border-sage-200 pt-4">
           <div className="flex justify-between items-center">
             <p className="text-sage-600 font-medium">Gesamt</p>
-            <p className="text-xl font-bold text-sage-900">€{totalPrice.toFixed(2)}</p>
+            <p className="text-xl font-bold text-sage-900">€{(totalPriceCents / 100).toFixed(2)}</p>
           </div>
         </div>
       </div>
