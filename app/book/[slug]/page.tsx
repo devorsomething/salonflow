@@ -22,12 +22,6 @@ interface TimeSlot {
   available: boolean;
 }
 
-interface Addon {
-  id: string;
-  name: string;
-  price: number;
-}
-
 interface SalonData {
   id: string;
   name: string;
@@ -67,15 +61,21 @@ interface DepositState {
   paymentMethod: 'card' | 'onsite';
 }
 
+interface Addon {
+  id: string;
+  name: string;
+  price_cents: number; // ADDON PRICES ARE IN CENT
+}
+
 type Step = 'service' | 'stylist' | 'date' | 'time' | 'coupon' | 'info' | 'anamnese' | 'deposit' | 'confirm';
 type AnimationDirection = 'left' | 'right' | 'none';
 
-// Default add-ons
+// Default add-ons (prices in CENT)
 const DEFAULT_ADDONS: Addon[] = [
-  { id: 'coffee', name: 'Kaffee', price: 2 },
-  { id: 'hair-product', name: 'Haarprodukt', price: 15 },
-  { id: 'champagne', name: 'Champagner', price: 12 },
-  { id: 'parking', name: 'Parken', price: 5 },
+  { id: 'coffee', name: 'Kaffee', price_cents: 200 },
+  { id: 'hair-product', name: 'Haarprodukt', price_cents: 1500 },
+  { id: 'champagne', name: 'Champagner', price_cents: 1200 },
+  { id: 'parking', name: 'Parken', price_cents: 500 },
 ];
 
 // API functions
@@ -441,7 +441,7 @@ function BookingSummarySidebar({
   notes: string;
 }) {
   const servicePrice = service?.price || 0;
-  const addonsPrice = addons.reduce((sum, a) => sum + a.price, 0);
+  const addonsPrice = addons.reduce((sum, a) => sum + a.price_cents, 0);
   const totalPrice = servicePrice + addonsPrice;
 
   const preferredTimeLabel = {
@@ -497,7 +497,7 @@ function BookingSummarySidebar({
             {addons.map((addon) => (
               <div key={addon.id} className="flex justify-between items-center mb-1">
                 <span className="text-sage-700">{addon.name}</span>
-                <span className="font-medium text-sage-700">+€{addon.price.toFixed(2)}</span>
+                <span className="font-medium text-sage-700">+€{(addon.price_cents / 100).toFixed(2)}</span>
               </div>
             ))}
           </div>
@@ -610,7 +610,12 @@ export default function BookingPage() {
       } else {
         setSalon(data);
         if (data.addons && data.addons.length > 0) {
-          setAddons(data.addons);
+          // Normalize: API might return addon.price in EUR, we store in cents
+          const normalizedAddons = data.addons.map((a: any) => ({
+            ...a,
+            price_cents: a.price_cents ?? (typeof a.price === 'number' ? a.price * 100 : 0),
+          }));
+          setAddons(normalizedAddons);
         }
       }
       setLoading(false);
@@ -716,10 +721,11 @@ export default function BookingPage() {
   };
 
   // Calculate total price with addons and discount
+  // NOTE: service.price is in EUR, addon.price_cents is in CENT
   const calculateTotal = (): number => {
-    const servicePrice = selectedService?.price || 0;
-    const addonsPrice = selectedAddons.reduce((sum, a) => sum + a.price, 0);
-    const subtotalCents = (servicePrice + addonsPrice) * 100;
+    const servicePriceCents = (selectedService?.price || 0) * 100; // EUR → cents
+    const addonsPrice = selectedAddons.reduce((sum, a) => sum + a.price_cents, 0); // already cents
+    const subtotalCents = servicePriceCents + addonsPrice;
     const discount = couponState.valid ? couponState.discount_cents : 0;
     return Math.max(0, subtotalCents - discount);
   };
@@ -782,7 +788,7 @@ export default function BookingPage() {
     setCouponState(prev => ({ ...prev, error: '' }));
 
     try {
-      const orderCents = ((selectedService?.price || 0) + selectedAddons.reduce((s, a) => s + a.price, 0)) * 100;
+      const orderCents = ((selectedService?.price || 0) * 100) + selectedAddons.reduce((s, a) => s + a.price_cents, 0);
       const res = await fetch('/api/coupons/validate', {
         method: 'POST',
         headers: {
@@ -1086,7 +1092,7 @@ export default function BookingPage() {
                               <div>
                                 <p className="font-medium text-sage-900">{addon.name}</p>
                                 <p className="text-sm text-sage-500 mt-1">
-                                  +€{addon.price.toFixed(2)}
+                                  +€{(addon.price_cents / 100).toFixed(2)}
                                 </p>
                               </div>
                               {isSelected && (
@@ -1425,7 +1431,7 @@ export default function BookingPage() {
                     <div className="flex justify-between items-center">
                       <span className="text-sage-600">Zwischensumme</span>
                       <span className="font-medium text-sage-900">
-                        €{((selectedService?.price || 0) + selectedAddons.reduce((s, a) => s + a.price, 0)).toFixed(2)}
+                        €{((((selectedService?.price || 0) * 100) + selectedAddons.reduce((s, a) => s + a.price_cents, 0)) / 100).toFixed(2)}
                       </span>
                     </div>
                     {couponState.valid && (
@@ -1965,7 +1971,7 @@ export default function BookingPage() {
                     {selectedAddons.length > 0 && (
                       <div className="flex justify-between text-sm">
                         <span className="text-sage-500">Add-ons</span>
-                        <span className="text-sage-700">+€{(selectedAddons.reduce((s, a) => s + a.price, 0) / 100).toFixed(2)}</span>
+                        <span className="text-sage-700">+€{(selectedAddons.reduce((s, a) => s + a.price_cents, 0) / 100).toFixed(2)}</span>
                       </div>
                     )}
                     {couponState.valid && (
