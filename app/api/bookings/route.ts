@@ -22,7 +22,16 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { service_id, stylist_id, start_time, end_time, customer_name, customer_phone, customer_email, notes } = body;
+
+    // Support both camelCase (frontend) and snake_case naming
+    const service_id = body.service_id || body.serviceId;
+    const stylist_id = body.stylist_id || body.stylistId;
+    const start_time = body.start_time || body.startTime;
+    const end_time = body.end_time || body.endTime;
+    const customer_name = body.customer_name || body.customerName;
+    const customer_phone = body.customer_phone || body.customerPhone;
+    const customer_email = body.customer_email || body.customerEmail;
+    const notes = body.notes;
 
     if (!service_id || !start_time) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
